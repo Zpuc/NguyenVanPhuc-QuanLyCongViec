@@ -34,4 +34,8 @@ yarn-error.log*
 Thumbs.db
 
 
+# Personal notes & Agent instructions
 lo-trinh-thuc-hien.txt
+*.txt
+AGENTS.md
+
