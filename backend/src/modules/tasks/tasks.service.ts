@@ -127,7 +127,14 @@ export class TasksService {
             throw new NotFoundException('Không tìm thấy công việc');
         }
 
-        await this.projectsService.verifyProjectMember(task.projectId, userId);
+        const member = await this.projectsService.verifyProjectMember(task.projectId, userId);
+
+        const isOwnerOrAdmin = member.role === 'OWNER' || member.role === 'ADMIN';
+        const isAssignee = task.assigneeId === userId;
+
+        if (!isOwnerOrAdmin && !isAssignee) {
+            throw new ForbiddenException('Bạn chỉ có thể kéo thả công việc được giao cho chính bạn');
+        }
 
         const oldColumnId = task.columnId;
 

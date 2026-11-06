@@ -19,9 +19,9 @@ export class CreateTaskDto {
     title: string;
 
     @ApiPropertyOptional({ example: 'chi tiết công việc' })
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
-    description: string;
+    description?: string;
 
     @ApiPropertyOptional({ enum: TaskPriority, default: TaskPriority.MEDIUM })
     @IsOptional()
