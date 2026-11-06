@@ -6,6 +6,8 @@ export interface CreateTaskDto {
   title: string;
   description?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  assigneeId?: string;
+  dueDate?: string;
 }
 
 export interface MoveTaskDto {

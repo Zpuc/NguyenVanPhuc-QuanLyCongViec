@@ -10,6 +10,7 @@ import {
   Form,
   Input,
   Select,
+  DatePicker,
   message,
   Spin,
   Avatar,
@@ -104,6 +105,8 @@ export const KanbanBoardPage: React.FC = () => {
         title: values.title,
         description: values.description,
         priority: values.priority,
+        assigneeId: values.assigneeId,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
       });
       message.success('Thêm công việc thành công!');
       setIsModalOpen(false);
@@ -395,6 +398,14 @@ export const KanbanBoardPage: React.FC = () => {
                                   {task.title}
                                 </Text>
 
+                                {task.dueDate && (
+                                  <div style={{ marginBottom: 8 }}>
+                                    <Tag icon={<CalendarOutlined />} color="default" style={{ fontSize: 11 }}>
+                                      {new Date(task.dueDate).toLocaleDateString('vi-VN')}
+                                    </Tag>
+                                  </div>
+                                )}
+
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <Tag color={priorityColors[task.priority]} style={{ margin: 0 }}>
                                     {priorityLabels[task.priority]}
@@ -474,16 +485,39 @@ export const KanbanBoardPage: React.FC = () => {
             <Input.TextArea rows={3} placeholder="Mô tả các yêu cầu cần làm..." />
           </Form.Item>
 
-          <Form.Item name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
-            <Select>
-              <Select.Option value="LOW">Thấp</Select.Option>
-              <Select.Option value="MEDIUM">Trung bình</Select.Option>
-              <Select.Option value="HIGH">Cao</Select.Option>
-              <Select.Option value="URGENT">Khẩn cấp</Select.Option>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
+              <Select>
+                <Select.Option value="LOW">Thấp</Select.Option>
+                <Select.Option value="MEDIUM">Trung bình</Select.Option>
+                <Select.Option value="HIGH">Cao</Select.Option>
+                <Select.Option value="URGENT">Khẩn cấp</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item name="dueDate" label="Hạn chót">
+              <DatePicker
+                style={{ width: '100%' }}
+                placeholder="Chọn ngày hết hạn"
+                format="DD/MM/YYYY"
+              />
+            </Form.Item>
+          </div>
+
+          <Form.Item name="assigneeId" label="Người thực hiện">
+            <Select placeholder="Chọn thành viên thực hiện (không bắt buộc)" allowClear>
+              {project.members.map((m) => (
+                <Select.Option key={m.user.id} value={m.user.id}>
+                  <Space>
+                    <Avatar size={18} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                    <span>{m.user.fullName}</span>
+                  </Space>
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
 
-          <div style={{ textAlign: 'right' }}>
+          <div style={{ textAlign: 'right', marginTop: 8 }}>
             <Space>
               <Button onClick={() => setIsModalOpen(false)}>Hủy</Button>
               <Button type="primary" htmlType="submit" loading={submitting}>

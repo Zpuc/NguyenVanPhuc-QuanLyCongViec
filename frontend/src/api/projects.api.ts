@@ -22,6 +22,7 @@ export interface TaskItem {
   title: string;
   description?: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate?: string;
   positionOrder: number;
   assignee?: {
     id: string;
