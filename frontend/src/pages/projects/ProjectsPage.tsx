@@ -3,6 +3,7 @@ import { Typography, Button, Row, Col, Card, Tag, Space, Modal, Form, Input, mes
 import { PlusOutlined, TeamOutlined, CheckSquareOutlined } from '@ant-design/icons';
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectItem, CreateProjectDto } from '../../api/projects.api';
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -12,6 +13,8 @@ export const ProjectsPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const navigate = useNavigate();
+
 
   const fetchProjects = async () => {
     try {
@@ -71,7 +74,11 @@ export const ProjectsPage: React.FC = () => {
         <Row gutter={[20, 20]}>
           {projects.map((p) => (
             <Col xs={24} sm={12} lg={8} key={p.id}>
-              <Card hoverable style={{ borderRadius: 12 }}>
+              <Card
+                hoverable
+                style={{ borderRadius: 12, cursor: 'pointer' }}
+                onClick={() => navigate(`/projects/${p.id}`)}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Tag color="blue" style={{ fontWeight: 'bold' }}>{p.key}</Tag>
                   <Text type="secondary" style={{ fontSize: 12 }}>Chủ dự án: {p.owner.fullName}</Text>
