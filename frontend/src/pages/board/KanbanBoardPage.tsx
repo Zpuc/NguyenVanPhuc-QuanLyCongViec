@@ -311,7 +311,8 @@ export const KanbanBoardPage: React.FC = () => {
   }
 
   const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
-  const isOwnerOrAdmin = currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN';
+  const isOwner = currentMember?.role === 'OWNER';
+  const isOwnerOrAdmin = isOwner || currentMember?.role === 'ADMIN';
 
   const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
   const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
@@ -403,12 +404,14 @@ export const KanbanBoardPage: React.FC = () => {
                   <Tag style={{ borderRadius: 10 }}>{column.tasks.length}</Tag>
                 </Space>
 
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={() => handleOpenCreateTask(column.id)}
-                />
+                {isOwnerOrAdmin && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleOpenCreateTask(column.id)}
+                  />
+                )}
               </div>
 
               <Droppable droppableId={column.id}>
@@ -517,15 +520,17 @@ export const KanbanBoardPage: React.FC = () => {
                     })}
                     {provided.placeholder}
 
-                    <Button
-                      type="dashed"
-                      block
-                      icon={<PlusOutlined />}
-                      onClick={() => handleOpenCreateTask(column.id)}
-                      style={{ marginTop: 4 }}
-                    >
-                      Thêm công việc
-                    </Button>
+                    {isOwnerOrAdmin && (
+                      <Button
+                        type="dashed"
+                        block
+                        icon={<PlusOutlined />}
+                        onClick={() => handleOpenCreateTask(column.id)}
+                        style={{ marginTop: 4 }}
+                      >
+                        Thêm công việc
+                      </Button>
+                    )}
                   </div>
                 )}
               </Droppable>
@@ -956,7 +961,51 @@ export const KanbanBoardPage: React.FC = () => {
                           </Text>
                         }
                       />
-                      <Tag color={roleInfo.color}>{roleInfo.label}</Tag>
+
+                      <Space size={8}>
+                        {isOwner ? (
+                          <Select
+                            size="small"
+                            value={member.role as 'ADMIN' | 'MEMBER' | 'VIEWER'}
+                            style={{ width: 130 }}
+                            onChange={async (newRole: 'ADMIN' | 'MEMBER' | 'VIEWER') => {
+                              try {
+                                await projectsApi.updateMemberRole(project.id, member.user.id, newRole);
+                                message.success('Đã cập nhật vai trò');
+                                fetchProjectDetail();
+                              } catch (err: any) {
+                                message.error(err.message || 'Cập nhật vai trò thất bại');
+                              }
+                            }}
+                          >
+                            <Select.Option value="ADMIN">Quản trị viên</Select.Option>
+                            <Select.Option value="MEMBER">Thành viên</Select.Option>
+                            <Select.Option value="VIEWER">Chỉ xem</Select.Option>
+                          </Select>
+                        ) : (
+                          <Tag color={roleInfo.color}>{roleInfo.label}</Tag>
+                        )}
+
+                        {isOwner && (
+                          <Popconfirm
+                            title="Xóa thành viên"
+                            description={`Bạn có chắc muốn xóa ${member.user.fullName} khỏi dự án?`}
+                            onConfirm={async () => {
+                              try {
+                                await projectsApi.removeMember(project.id, member.user.id);
+                                message.success('Đã xóa thành viên khỏi dự án');
+                                fetchProjectDetail();
+                              } catch (err: any) {
+                                message.error(err.message || 'Xóa thành viên thất bại');
+                              }
+                            }}
+                            okText="Xóa"
+                            cancelText="Hủy"
+                          >
+                            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        )}
+                      </Space>
                     </List.Item>
                   );
                 }}

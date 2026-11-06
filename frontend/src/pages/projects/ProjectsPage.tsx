@@ -4,6 +4,7 @@ import { PlusOutlined, TeamOutlined, CheckSquareOutlined } from '@ant-design/ico
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectItem, CreateProjectDto } from '../../api/projects.api';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -14,7 +15,7 @@ export const ProjectsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const navigate = useNavigate();
-
+  const currentUser = useAuthStore((state) => state.user);
 
   const fetchProjects = async () => {
     try {
@@ -50,12 +51,14 @@ export const ProjectsPage: React.FC = () => {
     }
   };
 
+  const myProjects = projects.filter((p) => p.owner.id === currentUser?.id);
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <Title level={2} style={{ margin: 0 }}>Dự án của tôi</Title>
-          <Text type="secondary">Quản lý và theo dõi tiến độ các dự án</Text>
+          <Text type="secondary">Các dự án do bạn làm chủ sở hữu</Text>
         </div>
         <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalOpen(true)}>
           Tạo dự án mới
@@ -64,15 +67,15 @@ export const ProjectsPage: React.FC = () => {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px 0' }}><Spin size="large" /></div>
-      ) : projects.length === 0 ? (
-        <Empty description="Bạn chưa có dự án nào" style={{ padding: '40px 0' }}>
+      ) : myProjects.length === 0 ? (
+        <Empty description="Bạn chưa làm chủ dự án nào" style={{ padding: '40px 0' }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
             Tạo dự án đầu tiên
           </Button>
         </Empty>
       ) : (
         <Row gutter={[20, 20]}>
-          {projects.map((p) => (
+          {myProjects.map((p) => (
             <Col xs={24} sm={12} lg={8} key={p.id}>
               <Card
                 hoverable
@@ -100,7 +103,7 @@ export const ProjectsPage: React.FC = () => {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
           <Form.Item name="name" label="Tên dự án" rules={[{ required: true, message: 'Nhập tên dự án!' }]}>

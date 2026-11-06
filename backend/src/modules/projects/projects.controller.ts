@@ -1,11 +1,12 @@
 import {
-    Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Req, UseGuards,
+    Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 
 @ApiTags('Projects (Quản lý Dự án)')
 @ApiBearerAuth()
@@ -42,11 +43,30 @@ export class ProjectsController {
         return this.projectsService.addMember(id, req.user.id, dto);
     }
 
+    @Patch(':id/members/:userId')
+    @ApiOperation({ summary: 'Cập nhật vai trò thành viên trong dự án (Chỉ OWNER)' })
+    updateMemberRole(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('userId', ParseUUIDPipe) targetUserId: string,
+        @Req() req: any,
+        @Body() dto: UpdateMemberRoleDto,
+    ) {
+        return this.projectsService.updateMemberRole(id, req.user.id, targetUserId, dto.role);
+    }
+
+    @Delete(':id/members/:userId')
+    @ApiOperation({ summary: 'Xóa thành viên khỏi dự án' })
+    removeMember(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('userId', ParseUUIDPipe) targetUserId: string,
+        @Req() req: any,
+    ) {
+        return this.projectsService.removeMember(id, req.user.id, targetUserId);
+    }
+
     @Delete(':id')
     @ApiOperation({ summary: 'Xóa dự án (Chỉ OWNER)' })
     remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
         return this.projectsService.remove(id, req.user.id);
     }
-
-
 }
