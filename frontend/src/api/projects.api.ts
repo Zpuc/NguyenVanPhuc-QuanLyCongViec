@@ -68,6 +68,11 @@ export interface CreateProjectDto {
   description?: string;
 }
 
+export interface AddMemberDto {
+  email: string;
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
 export const projectsApi = {
   getAllMyProjects: (): Promise<ProjectItem[]> => {
     return axiosClient.get('/projects');
@@ -79,5 +84,9 @@ export const projectsApi = {
 
   createProject: (data: CreateProjectDto): Promise<ProjectItem> => {
     return axiosClient.post('/projects', data);
+  },
+
+  addMember: (projectId: string, data: AddMemberDto) => {
+    return axiosClient.post(`/projects/${projectId}/members`, data);
   },
 };
