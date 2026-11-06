@@ -272,6 +272,9 @@ export const KanbanBoardPage: React.FC = () => {
     return null;
   }
 
+  const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
+  const isOwnerOrAdmin = currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -366,6 +369,7 @@ export const KanbanBoardPage: React.FC = () => {
                     }}
                   >
                     {column.tasks.map((task: TaskItem, index: number) => {
+                      const canDrag = isOwnerOrAdmin || task.assignee?.id === currentUser?.id;
                       const taskMenuItems: MenuProps['items'] = [
                         {
                           key: 'delete',
@@ -377,7 +381,7 @@ export const KanbanBoardPage: React.FC = () => {
                       ];
 
                       return (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                        <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!canDrag}>
                           {(dragProvided, dragSnapshot) => (
                             <div
                               ref={dragProvided.innerRef}
@@ -393,7 +397,8 @@ export const KanbanBoardPage: React.FC = () => {
                                   boxShadow: dragSnapshot.isDragging
                                     ? '0 10px 15px -3px rgba(0, 0, 0, 0.2)'
                                     : '0 1px 3px rgba(0,0,0,0.06)',
-                                  cursor: 'pointer',
+                                  cursor: canDrag ? 'grab' : 'pointer',
+                                  opacity: canDrag ? 1 : 0.88,
                                 }}
                               >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
