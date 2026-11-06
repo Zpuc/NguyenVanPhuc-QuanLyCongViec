@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
 import {
   Typography,
   Button,
@@ -243,6 +244,19 @@ export const KanbanBoardPage: React.FC = () => {
       fetchProjectDetail();
     } catch (err: any) {
       message.error(err.message || 'Không thể xóa bình luận');
+    }
+  };
+
+  const handleUpdateDueDate = async (date: dayjs.Dayjs | null) => {
+    if (!taskDetail) return;
+    try {
+      const newDueDate = date ? date.toISOString() : undefined;
+      await tasksApi.updateTask(taskDetail.id, { dueDate: newDueDate });
+      setTaskDetail({ ...taskDetail, dueDate: newDueDate });
+      message.success('Đã cập nhật hạn chót');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Cập nhật hạn chót thất bại');
     }
   };
 
@@ -573,14 +587,29 @@ export const KanbanBoardPage: React.FC = () => {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '120px 1fr',
-                rowGap: 12,
+                gridTemplateColumns: '130px 1fr',
+                rowGap: 14,
+                alignItems: 'center',
                 fontSize: 13,
                 background: '#f8fafc',
-                padding: 12,
+                padding: 14,
                 borderRadius: 8,
               }}
             >
+              <Text type="secondary">Cột trạng thái:</Text>
+              <div>
+                <Tag color={taskDetail.column.color || 'blue'} style={{ margin: 0 }}>
+                  {taskDetail.column.title}
+                </Tag>
+              </div>
+
+              <Text type="secondary">Mức độ ưu tiên:</Text>
+              <div>
+                <Tag color={priorityColors[taskDetail.priority]} style={{ margin: 0 }}>
+                  {priorityLabels[taskDetail.priority]}
+                </Tag>
+              </div>
+
               <Text type="secondary">Người thực hiện:</Text>
               <div>
                 {taskDetail.assignee ? (
@@ -596,6 +625,19 @@ export const KanbanBoardPage: React.FC = () => {
                 ) : (
                   <Text type="secondary">Chưa phân công</Text>
                 )}
+              </div>
+
+              <Text type="secondary">Hạn chót:</Text>
+              <div>
+                <DatePicker
+                  allowClear
+                  placeholder="Chọn hạn chót"
+                  format="DD/MM/YYYY"
+                  value={taskDetail.dueDate ? dayjs(taskDetail.dueDate) : null}
+                  onChange={handleUpdateDueDate}
+                  style={{ width: 180 }}
+                  size="small"
+                />
               </div>
 
               <Text type="secondary">Người tạo:</Text>

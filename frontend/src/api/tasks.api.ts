@@ -10,6 +10,14 @@ export interface CreateTaskDto {
   dueDate?: string;
 }
 
+export interface UpdateTaskDto {
+  title?: string;
+  description?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  assigneeId?: string;
+  dueDate?: string;
+}
+
 export interface MoveTaskDto {
   columnId: string;
   newPositionOrder: number;
@@ -56,6 +64,10 @@ export interface TaskDetail {
 export const tasksApi = {
   createTask: (data: CreateTaskDto) => {
     return axiosClient.post('/tasks', data);
+  },
+
+  updateTask: (taskId: string, data: UpdateTaskDto) => {
+    return axiosClient.patch(`/tasks/${taskId}`, data);
   },
 
   moveTask: (taskId: string, data: MoveTaskDto) => {
