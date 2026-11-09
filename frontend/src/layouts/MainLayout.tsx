@@ -2,7 +2,16 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Layout, Menu, Avatar, Dropdown, Space, Typography, Button, theme } from 'antd';
 import type { MenuProps } from 'antd';
-import { AppstoreOutlined, ProjectOutlined, UserOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CheckCircleFilled, } from '@ant-design/icons';
+import {
+  AppstoreOutlined,
+  ProjectOutlined,
+  TeamOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  CheckCircleFilled,
+} from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 
 const { Header, Sider, Content } = Layout;
@@ -38,6 +47,12 @@ export const MainLayout: React.FC = () => {
             icon: <ProjectOutlined />,
             label: 'Dự án của tôi',
             onClick: () => navigate('/projects'),
+        },
+        {
+            key: '/team-projects',
+            icon: <TeamOutlined />,
+            label: 'Dự án nhóm',
+            onClick: () => navigate('/team-projects'),
         },
     ];
 

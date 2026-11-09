@@ -14,9 +14,11 @@ export class TasksService {
 
 
     async create(userId: string, dto: CreateTaskDto) {
+        const member = await this.projectsService.verifyProjectMember(dto.projectId, userId);
 
-        await this.projectsService.verifyProjectMember(dto.projectId, userId);
-
+        if (member.role !== 'OWNER' && member.role !== 'ADMIN') {
+            throw new ForbiddenException('Chỉ Chủ dự án hoặc Quản trị viên mới có quyền tạo công việc');
+        }
 
         const column = await this.prisma.boardColumn.findFirst({
             where: { id: dto.columnId, projectId: dto.projectId },

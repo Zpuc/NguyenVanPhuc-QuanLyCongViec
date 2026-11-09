@@ -9,6 +9,7 @@ export interface ProjectItem {
     id: string;
     fullName: string;
     email: string;
+    avatarUrl?: string;
   };
   _count: {
     members: number;
@@ -49,10 +50,17 @@ export interface ProjectDetail {
   name: string;
   key: string;
   description?: string;
+  ownerId?: string;
+  owner?: {
+    id: string;
+    fullName: string;
+    email: string;
+    avatarUrl?: string;
+  };
   columns: ColumnItem[];
   members: {
     id: string;
-    role: string;
+    role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
     user: {
       id: string;
       fullName: string;
@@ -68,6 +76,11 @@ export interface CreateProjectDto {
   description?: string;
 }
 
+export interface AddMemberDto {
+  email: string;
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
 export const projectsApi = {
   getAllMyProjects: (): Promise<ProjectItem[]> => {
     return axiosClient.get('/projects');
@@ -79,5 +92,17 @@ export const projectsApi = {
 
   createProject: (data: CreateProjectDto): Promise<ProjectItem> => {
     return axiosClient.post('/projects', data);
+  },
+
+  addMember: (projectId: string, data: AddMemberDto) => {
+    return axiosClient.post(`/projects/${projectId}/members`, data);
+  },
+
+  updateMemberRole: (projectId: string, userId: string, role: 'ADMIN' | 'MEMBER' | 'VIEWER') => {
+    return axiosClient.patch(`/projects/${projectId}/members/${userId}`, { role });
+  },
+
+  removeMember: (projectId: string, userId: string) => {
+    return axiosClient.delete(`/projects/${projectId}/members/${userId}`);
   },
 };
