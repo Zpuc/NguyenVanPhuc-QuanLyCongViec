@@ -317,12 +317,20 @@ export const KanbanBoardPage: React.FC = () => {
   const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
   const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate(isOwner ? '/projects' : '/team-projects');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <Space size={16}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/projects')}>
-            Danh sách
+          <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+            Quay lại
           </Button>
           <Space align="center">
             <Title level={3} style={{ margin: 0 }}>
