@@ -13,6 +13,7 @@ export const ProjectsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
@@ -52,17 +53,36 @@ export const ProjectsPage: React.FC = () => {
   };
 
   const myProjects = projects.filter((p) => p.owner.id === currentUser?.id);
+  const filteredProjects = myProjects.filter((p) => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.key.toLowerCase().includes(q) ||
+      (p.description && p.description.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <Title level={2} style={{ margin: 0 }}>Dự án của tôi</Title>
           <Text type="secondary">Các dự án do bạn làm chủ sở hữu</Text>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalOpen(true)}>
-          Tạo dự án mới
-        </Button>
+        <Space size={12} wrap>
+          <Input.Search
+            placeholder="Tìm theo tên hoặc mã key..."
+            allowClear
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 260 }}
+            size="large"
+          />
+          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalOpen(true)}>
+            Tạo dự án mới
+          </Button>
+        </Space>
       </div>
 
       {loading ? (
@@ -73,9 +93,11 @@ export const ProjectsPage: React.FC = () => {
             Tạo dự án đầu tiên
           </Button>
         </Empty>
+      ) : filteredProjects.length === 0 ? (
+        <Empty description="Không tìm thấy dự án phù hợp với từ khóa" style={{ padding: '40px 0' }} />
       ) : (
         <Row gutter={[20, 20]}>
-          {myProjects.map((p) => (
+          {filteredProjects.map((p) => (
             <Col xs={24} sm={12} lg={8} key={p.id}>
               <Card
                 hoverable
