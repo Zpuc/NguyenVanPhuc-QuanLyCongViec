@@ -36,6 +36,7 @@ import {
   TeamOutlined,
   UserAddOutlined,
   CrownOutlined,
+  FilterOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
@@ -89,6 +90,10 @@ export const KanbanBoardPage: React.FC = () => {
   const [inviting, setInviting] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
+
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterPriority, setFilterPriority] = useState<string>('ALL');
+  const [filterOnlyMyTasks, setFilterOnlyMyTasks] = useState(false);
 
   const fetchProjectDetail = async () => {
     if (!id) return;
@@ -325,6 +330,29 @@ export const KanbanBoardPage: React.FC = () => {
     }
   };
 
+  const isFiltered = Boolean(filterSearch.trim() || filterPriority !== 'ALL' || filterOnlyMyTasks);
+
+  const getFilteredTasks = (tasks: TaskItem[]) => {
+    return tasks.filter((task) => {
+      if (filterOnlyMyTasks && task.assignee?.id !== currentUser?.id) {
+        return false;
+      }
+      if (filterPriority !== 'ALL' && task.priority !== filterPriority) {
+        return false;
+      }
+      if (filterSearch.trim()) {
+        const q = filterSearch.trim().toLowerCase();
+        const matchesTitle = task.title.toLowerCase().includes(q);
+        const matchesKey = `${project.key}-${task.taskNumber}`.toLowerCase().includes(q);
+        const matchesAssignee = task.assignee?.fullName.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesKey && !matchesAssignee) {
+          return false;
+        }
+      }
+      return true;
+    });
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -364,6 +392,72 @@ export const KanbanBoardPage: React.FC = () => {
         </Space>
       </div>
 
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 16,
+          flexWrap: 'wrap',
+          gap: 12,
+          padding: '10px 16px',
+          background: '#ffffff',
+          borderRadius: 10,
+          border: '1px solid #e2e8f0',
+        }}
+      >
+        <Space size={12} wrap align="center">
+          <Input.Search
+            placeholder="Tìm theo tên việc hoặc mã..."
+            allowClear
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+
+          <Select
+            value={filterPriority}
+            onChange={(val) => setFilterPriority(val)}
+            style={{ width: 170 }}
+            options={[
+              { value: 'ALL', label: 'Tất cả mức ưu tiên' },
+              { value: 'URGENT', label: 'Khẩn cấp (Urgent)' },
+              { value: 'HIGH', label: 'Cao (High)' },
+              { value: 'MEDIUM', label: 'Trung bình (Medium)' },
+              { value: 'LOW', label: 'Thấp (Low)' },
+            ]}
+          />
+
+          <Button
+            type={filterOnlyMyTasks ? 'primary' : 'default'}
+            icon={<UserOutlined />}
+            onClick={() => setFilterOnlyMyTasks(!filterOnlyMyTasks)}
+          >
+            Chỉ việc của tôi
+          </Button>
+
+          {isFiltered && (
+            <Button
+              type="link"
+              onClick={() => {
+                setFilterSearch('');
+                setFilterPriority('ALL');
+                setFilterOnlyMyTasks(false);
+              }}
+              style={{ padding: 0 }}
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
+        </Space>
+
+        {isFiltered && (
+          <Tag color="blue" icon={<FilterOutlined />}>
+            Đang lọc kết quả
+          </Tag>
+        )}
+      </div>
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <div
           style={{
@@ -373,74 +467,85 @@ export const KanbanBoardPage: React.FC = () => {
             alignItems: 'flex-start',
           }}
         >
-          {project.columns.map((column: ColumnItem) => (
-            <div
-              key={column.id}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                background: '#f8fafc',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                flexDirection: 'column',
-                maxHeight: 'calc(100vh - 220px)',
-              }}
-            >
+          {project.columns.map((column: ColumnItem) => {
+            const displayTasks = getFilteredTasks(column.tasks);
+            return (
               <div
+                key={column.id}
                 style={{
-                  padding: '12px 16px',
+                  flex: 1,
+                  minWidth: 0,
+                  background: '#f8fafc',
+                  borderRadius: 12,
+                  border: '1px solid #e2e8f0',
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderBottom: '1px solid #e2e8f0',
-                  background: '#ffffff',
-                  borderTopLeftRadius: 12,
-                  borderTopRightRadius: 12,
+                  flexDirection: 'column',
+                  maxHeight: 'calc(100vh - 270px)',
                 }}
               >
-                <Space>
-                  <div
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: column.color || '#3b82f6',
-                    }}
-                  />
-                  <Text strong>{column.title}</Text>
-                  <Tag style={{ borderRadius: 10 }}>{column.tasks.length}</Tag>
-                </Space>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px solid #e2e8f0',
+                    background: '#ffffff',
+                    borderTopLeftRadius: 12,
+                    borderTopRightRadius: 12,
+                  }}
+                >
+                  <Space>
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: column.color || '#3b82f6',
+                      }}
+                    />
+                    <Text strong>{column.title}</Text>
+                    <Tag style={{ borderRadius: 10 }}>
+                      {displayTasks.length === column.tasks.length
+                        ? column.tasks.length
+                        : `${displayTasks.length}/${column.tasks.length}`}
+                    </Tag>
+                  </Space>
 
-                {isOwnerOrAdmin && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => handleOpenCreateTask(column.id)}
-                  />
-                )}
-              </div>
+                  {isOwnerOrAdmin && (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => handleOpenCreateTask(column.id)}
+                    />
+                  )}
+                </div>
 
-              <Droppable droppableId={column.id}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    style={{
-                      padding: 12,
-                      overflowY: 'auto',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                      flex: 1,
-                      minHeight: 60,
-                      background: snapshot.isDraggingOver ? '#f1f5f9' : 'transparent',
-                      transition: 'background-color 0.2s ease',
-                    }}
-                  >
-                    {column.tasks.map((task: TaskItem, index: number) => {
-                      const canDrag = isOwnerOrAdmin || task.assignee?.id === currentUser?.id;
+                <Droppable droppableId={column.id}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      style={{
+                        padding: 12,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        flex: 1,
+                        minHeight: 60,
+                        background: snapshot.isDraggingOver ? '#f1f5f9' : 'transparent',
+                        transition: 'background-color 0.2s ease',
+                      }}
+                    >
+                      {displayTasks.length === 0 && column.tasks.length > 0 && (
+                        <div style={{ textAlign: 'center', padding: '24px 8px', color: '#94a3b8', fontSize: 13 }}>
+                          Không có thẻ phù hợp
+                        </div>
+                      )}
+                      {displayTasks.map((task: TaskItem, index: number) => {
+                        const canDrag = !isFiltered && (isOwnerOrAdmin || task.assignee?.id === currentUser?.id);
                       const taskMenuItems: MenuProps['items'] = [
                         {
                           key: 'delete',
@@ -542,8 +647,9 @@ export const KanbanBoardPage: React.FC = () => {
                   </div>
                 )}
               </Droppable>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </DragDropContext>
 
