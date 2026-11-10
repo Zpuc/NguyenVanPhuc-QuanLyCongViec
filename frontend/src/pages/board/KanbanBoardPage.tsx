@@ -335,11 +335,14 @@ export const KanbanBoardPage: React.FC = () => {
   const getFilteredTasks = (tasks: TaskItem[]) => {
     return tasks.filter((task) => {
       if (filterOnlyMyTasks) {
-        const isAssignedToMe = task.assignee?.id === currentUser?.id;
-        const isUnassignedInMyProject = !task.assignee && isOwner;
-        const isReportedByMe = Boolean(task.reporterId && task.reporterId === currentUser?.id);
-        if (!isAssignedToMe && !isUnassignedInMyProject && !isReportedByMe) {
-          return false;
+        if (task.assignee) {
+          if (task.assignee.id !== currentUser?.id) {
+            return false;
+          }
+        } else {
+          if (!isOwner && task.reporterId !== currentUser?.id) {
+            return false;
+          }
         }
       }
       if (filterPriority !== 'ALL' && task.priority !== filterPriority) {
