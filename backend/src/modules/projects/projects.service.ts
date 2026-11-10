@@ -9,10 +9,14 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ProjectRole } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ProjectsService {
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly notificationsService: NotificationsService,
+    ) { }
 
     async create(userId: string, dto: CreateProjectDto) {
         return this.prisma.$transaction(async (tx) => {
@@ -146,7 +150,7 @@ export class ProjectsService {
             throw new ConflictException('Người dùng này đã là thành viên của dự án');
         }
 
-        return this.prisma.projectMember.create({
+        const newMember = await this.prisma.projectMember.create({
             data: {
                 projectId,
                 userId: userToInvite.id,
@@ -156,8 +160,21 @@ export class ProjectsService {
                 user: {
                     select: { id: true, fullName: true, email: true, avatarUrl: true },
                 },
+                project: {
+                    select: { id: true, name: true, key: true },
+                },
             },
         });
+
+        await this.notificationsService.create({
+            recipientId: userToInvite.id,
+            title: 'Dự án mới',
+            content: `Bạn vừa được mời tham gia dự án "${newMember.project.name}" (${newMember.project.key})`,
+            type: 'PROJECT_INVITED',
+            metadata: { projectId },
+        });
+
+        return newMember;
     }
 
     async updateMemberRole(projectId: string, currentUserId: string, targetUserId: string, newRole: ProjectRole) {
