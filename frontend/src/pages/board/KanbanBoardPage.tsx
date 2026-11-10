@@ -20,6 +20,7 @@ import {
   Divider,
   List,
   Popconfirm,
+  Tooltip,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -32,6 +33,9 @@ import {
   DeleteOutlined,
   SendOutlined,
   CalendarOutlined,
+  TeamOutlined,
+  UserAddOutlined,
+  CrownOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
@@ -57,6 +61,13 @@ const priorityLabels: Record<string, string> = {
   URGENT: 'Khẩn cấp',
 };
 
+const roleLabels: Record<string, { label: string; color: string }> = {
+  OWNER: { label: 'Chủ dự án', color: 'gold' },
+  ADMIN: { label: 'Quản trị viên', color: 'blue' },
+  MEMBER: { label: 'Thành viên', color: 'green' },
+  VIEWER: { label: 'Chỉ xem', color: 'default' },
+};
+
 export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -73,6 +84,11 @@ export const KanbanBoardPage: React.FC = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+
+  const [isMembersDrawerOpen, setIsMembersDrawerOpen] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
 
   const fetchProjectDetail = async () => {
     if (!id) return;
@@ -260,6 +276,28 @@ export const KanbanBoardPage: React.FC = () => {
     }
   };
 
+  const handleInviteMember = async () => {
+    if (!project) return;
+    if (!inviteEmail.trim()) {
+      message.warning('Vui lòng nhập email của thành viên!');
+      return;
+    }
+    try {
+      setInviting(true);
+      await projectsApi.addMember(project.id, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      message.success('Đã thêm thành viên vào dự án');
+      setInviteEmail('');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể thêm thành viên');
+    } finally {
+      setInviting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
@@ -273,25 +311,56 @@ export const KanbanBoardPage: React.FC = () => {
   }
 
   const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
-  const isOwnerOrAdmin = currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN';
+  const isOwner = currentMember?.role === 'OWNER';
+  const isOwnerOrAdmin = isOwner || currentMember?.role === 'ADMIN';
+
+  const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
+  const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate(isOwner ? '/projects' : '/team-projects');
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <Space size={16}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/projects')}>
-            Danh sách
+          <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+            Quay lại
           </Button>
-          <div>
-            <Space align="center">
-              <Title level={3} style={{ margin: 0 }}>
-                {project.name}
-              </Title>
-              <Tag color="purple" style={{ fontWeight: 'bold' }}>
-                {project.key}
-              </Tag>
-            </Space>
-          </div>
+          <Space align="center">
+            <Title level={3} style={{ margin: 0 }}>
+              {project.name}
+            </Title>
+            <Tag color="purple" style={{ fontWeight: 'bold' }}>
+              {project.key}
+            </Tag>
+          </Space>
+        </Space>
+
+        <Space size={12}>
+          <Avatar.Group max={{ count: 4, style: { color: '#f56a00', backgroundColor: '#fde3cf' } }}>
+            {project.members.map((m) => (
+              <Tooltip key={m.id} title={`${m.user.fullName} (${roleLabels[m.role]?.label || m.role})`}>
+                <Avatar
+                  src={m.user.avatarUrl}
+                  icon={<UserOutlined />}
+                  style={{ backgroundColor: m.role === 'OWNER' ? '#eab308' : '#4f46e5' }}
+                />
+              </Tooltip>
+            ))}
+          </Avatar.Group>
+
+          <Button
+            icon={<TeamOutlined />}
+            onClick={() => setIsMembersDrawerOpen(true)}
+          >
+            Thành viên ({project.members.length})
+          </Button>
         </Space>
       </div>
 
@@ -343,12 +412,14 @@ export const KanbanBoardPage: React.FC = () => {
                   <Tag style={{ borderRadius: 10 }}>{column.tasks.length}</Tag>
                 </Space>
 
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={() => handleOpenCreateTask(column.id)}
-                />
+                {isOwnerOrAdmin && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleOpenCreateTask(column.id)}
+                  />
+                )}
               </div>
 
               <Droppable droppableId={column.id}>
@@ -457,15 +528,17 @@ export const KanbanBoardPage: React.FC = () => {
                     })}
                     {provided.placeholder}
 
-                    <Button
-                      type="dashed"
-                      block
-                      icon={<PlusOutlined />}
-                      onClick={() => handleOpenCreateTask(column.id)}
-                      style={{ marginTop: 4 }}
-                    >
-                      Thêm công việc
-                    </Button>
+                    {isOwnerOrAdmin && (
+                      <Button
+                        type="dashed"
+                        block
+                        icon={<PlusOutlined />}
+                        onClick={() => handleOpenCreateTask(column.id)}
+                        style={{ marginTop: 4 }}
+                      >
+                        Thêm công việc
+                      </Button>
+                    )}
                   </div>
                 )}
               </Droppable>
@@ -779,6 +852,211 @@ export const KanbanBoardPage: React.FC = () => {
             </div>
           </div>
         ) : null}
+      </Drawer>
+
+      <Drawer
+        title={
+          <Space>
+            <Tag color="purple">{project.key}</Tag>
+            <Text strong style={{ fontSize: 16 }}>Thành viên dự án</Text>
+          </Space>
+        }
+        placement="right"
+        width={460}
+        open={isMembersDrawerOpen}
+        onClose={() => setIsMembersDrawerOpen(false)}
+        destroyOnHidden
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <Space align="center" style={{ marginBottom: 10 }}>
+              <CrownOutlined style={{ color: '#eab308', fontSize: 16 }} />
+              <Text strong style={{ fontSize: 14 }}>
+                Chủ dự án (Owner)
+              </Text>
+            </Space>
+
+            {ownerMembers.map((owner) => (
+              <div
+                key={owner.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  background: '#fefce8',
+                  border: '1px solid #fef08a',
+                  borderRadius: 8,
+                }}
+              >
+                <Space size={12}>
+                  <Avatar
+                    size={38}
+                    icon={<UserOutlined />}
+                    src={owner.user.avatarUrl}
+                    style={{ backgroundColor: '#eab308' }}
+                  />
+                  <div>
+                    <Text strong style={{ display: 'block', fontSize: 14 }}>
+                      {owner.user.fullName}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {owner.user.email}
+                    </Text>
+                  </div>
+                </Space>
+                <Tag color="gold" style={{ fontWeight: 600 }}>
+                  Chủ dự án
+                </Tag>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text strong style={{ fontSize: 14 }}>
+                Thành viên tham gia ({invitedMembers.length})
+              </Text>
+            </div>
+
+            {invitedMembers.length === 0 ? (
+              <div
+                style={{
+                  padding: '24px 0',
+                  textAlign: 'center',
+                  background: '#f8fafc',
+                  borderRadius: 8,
+                  color: '#94a3b8',
+                  fontSize: 13,
+                }}
+              >
+                Chưa có thành viên nào khác trong dự án
+              </div>
+            ) : (
+              <List
+                dataSource={invitedMembers}
+                renderItem={(member) => {
+                  const roleInfo = roleLabels[member.role] || { label: member.role, color: 'default' };
+
+                  return (
+                    <List.Item
+                      key={member.id}
+                      style={{
+                        padding: '10px 12px',
+                        background: '#f8fafc',
+                        borderRadius: 8,
+                        marginBottom: 8,
+                        border: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <List.Item.Meta
+                        avatar={
+                          <Avatar
+                            size={34}
+                            icon={<UserOutlined />}
+                            src={member.user.avatarUrl}
+                            style={{ backgroundColor: '#4f46e5' }}
+                          />
+                        }
+                        title={
+                          <Text strong style={{ fontSize: 13 }}>
+                            {member.user.fullName}
+                          </Text>
+                        }
+                        description={
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {member.user.email}
+                          </Text>
+                        }
+                      />
+
+                      <Space size={8}>
+                        {isOwner ? (
+                          <Select
+                            size="small"
+                            value={member.role as 'ADMIN' | 'MEMBER' | 'VIEWER'}
+                            style={{ width: 130 }}
+                            onChange={async (newRole: 'ADMIN' | 'MEMBER' | 'VIEWER') => {
+                              try {
+                                await projectsApi.updateMemberRole(project.id, member.user.id, newRole);
+                                message.success('Đã cập nhật vai trò');
+                                fetchProjectDetail();
+                              } catch (err: any) {
+                                message.error(err.message || 'Cập nhật vai trò thất bại');
+                              }
+                            }}
+                          >
+                            <Select.Option value="ADMIN">Quản trị viên</Select.Option>
+                            <Select.Option value="MEMBER">Thành viên</Select.Option>
+                            <Select.Option value="VIEWER">Chỉ xem</Select.Option>
+                          </Select>
+                        ) : (
+                          <Tag color={roleInfo.color}>{roleInfo.label}</Tag>
+                        )}
+
+                        {isOwner && (
+                          <Popconfirm
+                            title="Xóa thành viên"
+                            description={`Bạn có chắc muốn xóa ${member.user.fullName} khỏi dự án?`}
+                            onConfirm={async () => {
+                              try {
+                                await projectsApi.removeMember(project.id, member.user.id);
+                                message.success('Đã xóa thành viên khỏi dự án');
+                                fetchProjectDetail();
+                              } catch (err: any) {
+                                message.error(err.message || 'Xóa thành viên thất bại');
+                              }
+                            }}
+                            okText="Xóa"
+                            cancelText="Hủy"
+                          >
+                            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        )}
+                      </Space>
+                    </List.Item>
+                  );
+                }}
+              />
+            )}
+          </div>
+
+          {isOwnerOrAdmin && (
+            <div style={{ padding: 14, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <Text strong style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
+                Mời thành viên mới vào dự án
+              </Text>
+              <Space direction="vertical" style={{ width: '100%' }} size={10}>
+                <Input
+                  placeholder="Nhập email tài khoản cần mời..."
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onPressEnter={handleInviteMember}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Select
+                    value={inviteRole}
+                    onChange={(val) => setInviteRole(val)}
+                    style={{ width: 140 }}
+                  >
+                    <Select.Option value="MEMBER">Thành viên</Select.Option>
+                    <Select.Option value="ADMIN">Quản trị viên</Select.Option>
+                    <Select.Option value="VIEWER">Chỉ xem</Select.Option>
+                  </Select>
+                  <Button
+                    type="primary"
+                    icon={<UserAddOutlined />}
+                    loading={inviting}
+                    onClick={handleInviteMember}
+                    style={{ flex: 1 }}
+                  >
+                    Mời vào dự án
+                  </Button>
+                </div>
+              </Space>
+            </div>
+          )}
+        </div>
       </Drawer>
     </div>
   );

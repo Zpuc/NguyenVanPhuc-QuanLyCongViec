@@ -4,6 +4,7 @@ import { PlusOutlined, TeamOutlined, CheckSquareOutlined } from '@ant-design/ico
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectItem, CreateProjectDto } from '../../api/projects.api';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -12,9 +13,10 @@ export const ProjectsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
   const navigate = useNavigate();
-
+  const currentUser = useAuthStore((state) => state.user);
 
   const fetchProjects = async () => {
     try {
@@ -50,29 +52,52 @@ export const ProjectsPage: React.FC = () => {
     }
   };
 
+  const myProjects = projects.filter((p) => p.owner.id === currentUser?.id);
+  const filteredProjects = myProjects.filter((p) => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.key.toLowerCase().includes(q) ||
+      (p.description && p.description.toLowerCase().includes(q))
+    );
+  });
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <Title level={2} style={{ margin: 0 }}>Dự án của tôi</Title>
-          <Text type="secondary">Quản lý và theo dõi tiến độ các dự án</Text>
+          <Text type="secondary">Các dự án do bạn làm chủ sở hữu</Text>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalOpen(true)}>
-          Tạo dự án mới
-        </Button>
+        <Space size={12} wrap>
+          <Input.Search
+            placeholder="Tìm theo tên hoặc mã key..."
+            allowClear
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 260 }}
+            size="large"
+          />
+          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalOpen(true)}>
+            Tạo dự án mới
+          </Button>
+        </Space>
       </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px 0' }}><Spin size="large" /></div>
-      ) : projects.length === 0 ? (
-        <Empty description="Bạn chưa có dự án nào" style={{ padding: '40px 0' }}>
+      ) : myProjects.length === 0 ? (
+        <Empty description="Bạn chưa làm chủ dự án nào" style={{ padding: '40px 0' }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
             Tạo dự án đầu tiên
           </Button>
         </Empty>
+      ) : filteredProjects.length === 0 ? (
+        <Empty description="Không tìm thấy dự án phù hợp với từ khóa" style={{ padding: '40px 0' }} />
       ) : (
         <Row gutter={[20, 20]}>
-          {projects.map((p) => (
+          {filteredProjects.map((p) => (
             <Col xs={24} sm={12} lg={8} key={p.id}>
               <Card
                 hoverable
@@ -100,7 +125,7 @@ export const ProjectsPage: React.FC = () => {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
           <Form.Item name="name" label="Tên dự án" rules={[{ required: true, message: 'Nhập tên dự án!' }]}>

@@ -4,19 +4,23 @@ import { ProjectsService } from '../projects/projects.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class TasksService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly projectsService: ProjectsService,
+        private readonly notificationsService: NotificationsService,
     ) { }
 
 
     async create(userId: string, dto: CreateTaskDto) {
+        const member = await this.projectsService.verifyProjectMember(dto.projectId, userId);
 
-        await this.projectsService.verifyProjectMember(dto.projectId, userId);
-
+        if (member.role !== 'OWNER' && member.role !== 'ADMIN') {
+            throw new ForbiddenException('Chỉ Chủ dự án hoặc Quản trị viên mới có quyền tạo công việc');
+        }
 
         const column = await this.prisma.boardColumn.findFirst({
             where: { id: dto.columnId, projectId: dto.projectId },
@@ -25,7 +29,7 @@ export class TasksService {
             throw new BadRequestException('Cột trạng thái không tồn tại trong dự án này');
         }
 
-        return this.prisma.$transaction(async (tx) => {
+        const result = await this.prisma.$transaction(async (tx) => {
 
             const lastTask = await tx.task.findFirst({
                 where: { projectId: dto.projectId },
@@ -79,6 +83,22 @@ export class TasksService {
 
             return task;
         });
+
+        if (dto.assigneeId && dto.assigneeId !== userId) {
+            const project = await this.prisma.project.findUnique({
+                where: { id: dto.projectId },
+                select: { name: true, key: true },
+            });
+            await this.notificationsService.create({
+                recipientId: dto.assigneeId,
+                title: 'Giao việc mới',
+                content: `Bạn được giao công việc "${result.title}" (${project?.key}-${result.taskNumber})`,
+                type: 'TASK_ASSIGNED',
+                metadata: { projectId: dto.projectId, taskId: result.id },
+            });
+        }
+
+        return result;
     }
 
     async findOne(taskId: string, userId: string) {
@@ -172,7 +192,7 @@ export class TasksService {
 
         await this.projectsService.verifyProjectMember(task.projectId, userId);
 
-        return this.prisma.task.update({
+        const updated = await this.prisma.task.update({
             where: { id: taskId },
             data: {
                 title: dto.title,
@@ -181,7 +201,22 @@ export class TasksService {
                 assigneeId: dto.assigneeId,
                 dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
             },
+            include: {
+                project: { select: { id: true, name: true, key: true } },
+            },
         });
+
+        if (dto.assigneeId && dto.assigneeId !== userId && dto.assigneeId !== task.assigneeId) {
+            await this.notificationsService.create({
+                recipientId: dto.assigneeId,
+                title: 'Giao việc mới',
+                content: `Bạn được giao công việc "${updated.title}" (${updated.project.key}-${updated.taskNumber})`,
+                type: 'TASK_ASSIGNED',
+                metadata: { projectId: task.projectId, taskId },
+            });
+        }
+
+        return updated;
     }
 
     async remove(taskId: string, userId: string) {
