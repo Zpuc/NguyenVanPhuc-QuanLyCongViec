@@ -1,13 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException, } from '@nestjs/common'
-import { PrismaService } from '../../database/prisma/prisma.service'
-import { ProjectsService } from '../projects/projects.service'
-import { CreateCommentDto } from './dto/create-comment.dto'
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../database/prisma/prisma.service';
+import { ProjectsService } from '../projects/projects.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { CreateCommentDto } from './dto/create-comment.dto';
 
 @Injectable()
 export class CommentsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly projectsService: ProjectsService,
+        private readonly notificationsService: NotificationsService,
     ) { }
 
     async create(taskId: string, userId: string, dto: CreateCommentDto) {
@@ -40,7 +42,18 @@ export class CommentsService {
             },
         });
 
-        return comment
+        const targetUser = task.assigneeId && task.assigneeId !== userId ? task.assigneeId : (task.reporterId !== userId ? task.reporterId : null);
+        if (targetUser) {
+            await this.notificationsService.create({
+                recipientId: targetUser,
+                title: 'Bình luận mới',
+                content: `${comment.user.fullName} đã bình luận: "${dto.content.slice(0, 50)}${dto.content.length > 50 ? '...' : ''}" trong "${task.title}"`,
+                type: 'COMMENT_ADDED',
+                metadata: { projectId: task.projectId, taskId },
+            });
+        }
+
+        return comment;
     }
 
     async remove(commentId: string, userId: string) {
