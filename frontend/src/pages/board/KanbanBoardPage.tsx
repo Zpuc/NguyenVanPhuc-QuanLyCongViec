@@ -113,7 +113,7 @@ export const KanbanBoardPage: React.FC = () => {
   }, [id]);
 
   const handleOpenCreateTask = (columnId: string) => {
-    form.setFieldsValue({ columnId, priority: 'MEDIUM' });
+    form.setFieldsValue({ columnId, priority: 'MEDIUM', assigneeId: currentUser?.id });
     setIsModalOpen(true);
   };
 
@@ -334,8 +334,13 @@ export const KanbanBoardPage: React.FC = () => {
 
   const getFilteredTasks = (tasks: TaskItem[]) => {
     return tasks.filter((task) => {
-      if (filterOnlyMyTasks && task.assignee?.id !== currentUser?.id) {
-        return false;
+      if (filterOnlyMyTasks) {
+        const isAssignedToMe = task.assignee?.id === currentUser?.id;
+        const isUnassignedInMyProject = !task.assignee && isOwner;
+        const isReportedByMe = Boolean(task.reporterId && task.reporterId === currentUser?.id);
+        if (!isAssignedToMe && !isUnassignedInMyProject && !isReportedByMe) {
+          return false;
+        }
       }
       if (filterPriority !== 'ALL' && task.priority !== filterPriority) {
         return false;

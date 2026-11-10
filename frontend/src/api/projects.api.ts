@@ -25,6 +25,7 @@ export interface TaskItem {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate?: string;
   positionOrder: number;
+  reporterId?: string;
   assignee?: {
     id: string;
     fullName: string;
