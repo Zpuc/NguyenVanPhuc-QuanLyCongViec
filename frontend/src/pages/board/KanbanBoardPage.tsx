@@ -21,6 +21,8 @@ import {
   List,
   Popconfirm,
   Tooltip,
+  Upload,
+  Image,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -36,13 +38,18 @@ import {
   TeamOutlined,
   UserAddOutlined,
   CrownOutlined,
+  FilterOutlined,
+  EditOutlined,
+  UploadOutlined,
+  FileOutlined,
+  FileImageOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectDetail, ColumnItem, TaskItem } from '../../api/projects.api';
 import { tasksApi } from '../../api/tasks.api';
-import type { TaskDetail } from '../../api/tasks.api';
+import type { TaskDetail, UpdateTaskDto } from '../../api/tasks.api';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
@@ -68,6 +75,17 @@ const roleLabels: Record<string, { label: string; color: string }> = {
   VIEWER: { label: 'Chỉ xem', color: 'default' },
 };
 
+const columnColors = [
+  '#64748b',
+  '#3b82f6',
+  '#f59e0b',
+  '#22c55e',
+  '#8b5cf6',
+  '#ec4899',
+  '#ef4444',
+  '#06b6d4',
+];
+
 export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -84,11 +102,25 @@ export const KanbanBoardPage: React.FC = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   const [isMembersDrawerOpen, setIsMembersDrawerOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
+
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterPriority, setFilterPriority] = useState<string>('ALL');
+  const [filterOnlyMyTasks, setFilterOnlyMyTasks] = useState(false);
+
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<ColumnItem | null>(null);
+  const [columnTitleInput, setColumnTitleInput] = useState('');
+  const [columnColorInput, setColumnColorInput] = useState('#64748b');
+  const [savingColumn, setSavingColumn] = useState(false);
 
   const fetchProjectDetail = async () => {
     if (!id) return;
@@ -108,7 +140,7 @@ export const KanbanBoardPage: React.FC = () => {
   }, [id]);
 
   const handleOpenCreateTask = (columnId: string) => {
-    form.setFieldsValue({ columnId, priority: 'MEDIUM' });
+    form.setFieldsValue({ columnId, priority: 'MEDIUM', assigneeId: currentUser?.id });
     setIsModalOpen(true);
   };
 
@@ -213,9 +245,11 @@ export const KanbanBoardPage: React.FC = () => {
   const handleOpenTaskDetail = async (taskId: string) => {
     setSelectedTaskId(taskId);
     setDrawerLoading(true);
+    setEditingDescription(false);
     try {
       const data = await tasksApi.getTaskDetail(taskId);
       setTaskDetail(data);
+      setDescriptionDraft(data.description || '');
     } catch (err: any) {
       message.error(err.message || 'Không thể tải chi tiết công việc');
     } finally {
@@ -227,6 +261,7 @@ export const KanbanBoardPage: React.FC = () => {
     setSelectedTaskId(null);
     setTaskDetail(null);
     setCommentText('');
+    setEditingDescription(false);
   };
 
   const handleAddComment = async () => {
@@ -263,17 +298,70 @@ export const KanbanBoardPage: React.FC = () => {
     }
   };
 
-  const handleUpdateDueDate = async (date: dayjs.Dayjs | null) => {
+  const handleUpdateTaskField = async (payload: UpdateTaskDto, successMessage: string) => {
     if (!taskDetail) return;
     try {
-      const newDueDate = date ? date.toISOString() : undefined;
-      await tasksApi.updateTask(taskDetail.id, { dueDate: newDueDate });
-      setTaskDetail({ ...taskDetail, dueDate: newDueDate });
-      message.success('Đã cập nhật hạn chót');
+      setSavingTask(true);
+      const updated = await tasksApi.updateTask(taskDetail.id, payload);
+      setTaskDetail({
+        ...taskDetail,
+        title: updated.title,
+        description: updated.description,
+        priority: updated.priority,
+        dueDate: updated.dueDate,
+        assignee: updated.assignee,
+      });
+      message.success(successMessage);
       fetchProjectDetail();
     } catch (err: any) {
-      message.error(err.message || 'Cập nhật hạn chót thất bại');
+      message.error(err.message || 'Cập nhật công việc thất bại');
+    } finally {
+      setSavingTask(false);
     }
+  };
+
+  const handleUpdateDueDate = async (date: dayjs.Dayjs | null) => {
+    const newDueDate = date ? date.toISOString() : null;
+    await handleUpdateTaskField({ dueDate: newDueDate }, 'Đã cập nhật hạn chót');
+  };
+
+  const handleUploadAttachment = async (file: File) => {
+    if (!taskDetail) return;
+    try {
+      setUploadingFile(true);
+      const attachment = await tasksApi.uploadAttachment(taskDetail.id, file);
+      setTaskDetail({
+        ...taskDetail,
+        attachments: [attachment, ...(taskDetail.attachments || [])],
+      });
+      message.success('Tải lên tệp đính kèm thành công');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Tải lên tệp thất bại');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!taskDetail) return;
+    try {
+      await tasksApi.deleteAttachment(attachmentId);
+      setTaskDetail({
+        ...taskDetail,
+        attachments: taskDetail.attachments.filter((a) => a.id !== attachmentId),
+      });
+      message.success('Đã xóa tệp đính kèm');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Xóa tệp đính kèm thất bại');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleInviteMember = async () => {
@@ -298,6 +386,79 @@ export const KanbanBoardPage: React.FC = () => {
     }
   };
 
+  const handleOpenCreateColumn = () => {
+    setEditingColumn(null);
+    setColumnTitleInput('');
+    setColumnColorInput('#64748b');
+    setIsColumnModalOpen(true);
+  };
+
+  const handleOpenEditColumn = (column: ColumnItem) => {
+    setEditingColumn(column);
+    setColumnTitleInput(column.title);
+    setColumnColorInput(column.color || '#64748b');
+    setIsColumnModalOpen(true);
+  };
+
+  const handleSaveColumn = async () => {
+    if (!project) return;
+    if (!columnTitleInput.trim()) {
+      message.warning('Vui lòng nhập tên cột');
+      return;
+    }
+    try {
+      setSavingColumn(true);
+      if (editingColumn) {
+        await projectsApi.updateColumn(project.id, editingColumn.id, {
+          title: columnTitleInput.trim(),
+          color: columnColorInput,
+        });
+        message.success('Đã cập nhật cột trạng thái');
+      } else {
+        await projectsApi.createColumn(project.id, {
+          title: columnTitleInput.trim(),
+          color: columnColorInput,
+        });
+        message.success('Đã thêm cột trạng thái mới');
+      }
+      setIsColumnModalOpen(false);
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể lưu cột trạng thái');
+    } finally {
+      setSavingColumn(false);
+    }
+  };
+
+  const handleDeleteColumn = (column: ColumnItem) => {
+    if (!project) return;
+    if (project.columns.length <= 1) {
+      message.warning('Dự án phải giữ lại ít nhất 1 cột trạng thái');
+      return;
+    }
+    if (column.tasks.length > 0) {
+      message.warning('Vui lòng di chuyển hết công việc sang cột khác trước khi xóa cột này');
+      return;
+    }
+
+    Modal.confirm({
+      title: `Xóa cột "${column.title}"?`,
+      content: 'Thao tác này sẽ xóa cột trạng thái khỏi bảng Kanban.',
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await projectsApi.deleteColumn(project.id, column.id);
+          message.success('Đã xóa cột trạng thái');
+          fetchProjectDetail();
+        } catch (err: any) {
+          message.error(err.message || 'Không thể xóa cột trạng thái');
+        }
+      },
+    });
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
@@ -313,6 +474,7 @@ export const KanbanBoardPage: React.FC = () => {
   const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
   const isOwner = currentMember?.role === 'OWNER';
   const isOwnerOrAdmin = isOwner || currentMember?.role === 'ADMIN';
+  const canEditTask = currentMember?.role !== 'VIEWER';
 
   const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
   const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
@@ -323,6 +485,37 @@ export const KanbanBoardPage: React.FC = () => {
     } else {
       navigate(isOwner ? '/projects' : '/team-projects');
     }
+  };
+
+  const isFiltered = Boolean(filterSearch.trim() || filterPriority !== 'ALL' || filterOnlyMyTasks);
+
+  const getFilteredTasks = (tasks: TaskItem[]) => {
+    return tasks.filter((task) => {
+      if (filterOnlyMyTasks) {
+        if (task.assignee) {
+          if (task.assignee.id !== currentUser?.id) {
+            return false;
+          }
+        } else {
+          if (!isOwner && task.reporterId !== currentUser?.id) {
+            return false;
+          }
+        }
+      }
+      if (filterPriority !== 'ALL' && task.priority !== filterPriority) {
+        return false;
+      }
+      if (filterSearch.trim()) {
+        const q = filterSearch.trim().toLowerCase();
+        const matchesTitle = task.title.toLowerCase().includes(q);
+        const matchesKey = `${project.key}-${task.taskNumber}`.toLowerCase().includes(q);
+        const matchesAssignee = task.assignee?.fullName.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesKey && !matchesAssignee) {
+          return false;
+        }
+      }
+      return true;
+    });
   };
 
   return (
@@ -361,7 +554,83 @@ export const KanbanBoardPage: React.FC = () => {
           >
             Thành viên ({project.members.length})
           </Button>
+
+          {isOwnerOrAdmin && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenCreateColumn}
+            >
+              Thêm cột
+            </Button>
+          )}
         </Space>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 16,
+          flexWrap: 'wrap',
+          gap: 12,
+          padding: '10px 16px',
+          background: '#ffffff',
+          borderRadius: 10,
+          border: '1px solid #e2e8f0',
+        }}
+      >
+        <Space size={12} wrap align="center">
+          <Input.Search
+            placeholder="Tìm theo tên việc hoặc mã..."
+            allowClear
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+
+          <Select
+            value={filterPriority}
+            onChange={(val) => setFilterPriority(val)}
+            style={{ width: 170 }}
+            options={[
+              { value: 'ALL', label: 'Tất cả mức ưu tiên' },
+              { value: 'URGENT', label: 'Khẩn cấp (Urgent)' },
+              { value: 'HIGH', label: 'Cao (High)' },
+              { value: 'MEDIUM', label: 'Trung bình (Medium)' },
+              { value: 'LOW', label: 'Thấp (Low)' },
+            ]}
+          />
+
+          <Button
+            type={filterOnlyMyTasks ? 'primary' : 'default'}
+            icon={<UserOutlined />}
+            onClick={() => setFilterOnlyMyTasks(!filterOnlyMyTasks)}
+          >
+            Chỉ việc của tôi
+          </Button>
+
+          {isFiltered && (
+            <Button
+              type="link"
+              onClick={() => {
+                setFilterSearch('');
+                setFilterPriority('ALL');
+                setFilterOnlyMyTasks(false);
+              }}
+              style={{ padding: 0 }}
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
+        </Space>
+
+        {isFiltered && (
+          <Tag color="blue" icon={<FilterOutlined />}>
+            Đang lọc kết quả
+          </Tag>
+        )}
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
@@ -371,76 +640,114 @@ export const KanbanBoardPage: React.FC = () => {
             gap: 16,
             width: '100%',
             alignItems: 'flex-start',
+            overflowX: 'auto',
+            paddingBottom: 12,
           }}
         >
-          {project.columns.map((column: ColumnItem) => (
-            <div
-              key={column.id}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                background: '#f8fafc',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                flexDirection: 'column',
-                maxHeight: 'calc(100vh - 220px)',
-              }}
-            >
+          {project.columns.map((column: ColumnItem) => {
+            const displayTasks = getFilteredTasks(column.tasks);
+            const columnMenuItems: MenuProps['items'] = [
+              {
+                key: 'edit',
+                label: 'Chỉnh sửa cột',
+                icon: <EditOutlined />,
+                onClick: () => handleOpenEditColumn(column),
+              },
+              {
+                key: 'delete',
+                label: 'Xóa cột',
+                danger: true,
+                icon: <DeleteOutlined />,
+                onClick: () => handleDeleteColumn(column),
+              },
+            ];
+
+            return (
               <div
+                key={column.id}
                 style={{
-                  padding: '12px 16px',
+                  flex: '1 0 230px',
+                  minWidth: 230,
+                  background: '#f8fafc',
+                  borderRadius: 12,
+                  border: '1px solid #e2e8f0',
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderBottom: '1px solid #e2e8f0',
-                  background: '#ffffff',
-                  borderTopLeftRadius: 12,
-                  borderTopRightRadius: 12,
+                  flexDirection: 'column',
+                  maxHeight: 'calc(100vh - 270px)',
                 }}
               >
-                <Space>
-                  <div
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: column.color || '#3b82f6',
-                    }}
-                  />
-                  <Text strong>{column.title}</Text>
-                  <Tag style={{ borderRadius: 10 }}>{column.tasks.length}</Tag>
-                </Space>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderBottom: '1px solid #e2e8f0',
+                    background: '#ffffff',
+                    borderTopLeftRadius: 12,
+                    borderTopRightRadius: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        background: column.color || '#3b82f6',
+                      }}
+                    />
+                    <Text strong ellipsis={{ tooltip: column.title }}>
+                      {column.title}
+                    </Text>
+                    <Tag style={{ borderRadius: 10, marginInlineEnd: 0, flexShrink: 0 }}>
+                      {displayTasks.length === column.tasks.length
+                        ? column.tasks.length
+                        : `${displayTasks.length}/${column.tasks.length}`}
+                    </Tag>
+                  </div>
 
-                {isOwnerOrAdmin && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => handleOpenCreateTask(column.id)}
-                  />
-                )}
-              </div>
+                  {isOwnerOrAdmin && (
+                    <Space size={2} style={{ flexShrink: 0 }}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => handleOpenCreateTask(column.id)}
+                      />
+                      <Dropdown menu={{ items: columnMenuItems }} trigger={['click']}>
+                        <Button type="text" size="small" icon={<MoreOutlined />} />
+                      </Dropdown>
+                    </Space>
+                  )}
+                </div>
 
-              <Droppable droppableId={column.id}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    style={{
-                      padding: 12,
-                      overflowY: 'auto',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                      flex: 1,
-                      minHeight: 60,
-                      background: snapshot.isDraggingOver ? '#f1f5f9' : 'transparent',
-                      transition: 'background-color 0.2s ease',
-                    }}
-                  >
-                    {column.tasks.map((task: TaskItem, index: number) => {
-                      const canDrag = isOwnerOrAdmin || task.assignee?.id === currentUser?.id;
+                <Droppable droppableId={column.id}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      style={{
+                        padding: 12,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        flex: 1,
+                        minHeight: 60,
+                        background: snapshot.isDraggingOver ? '#f1f5f9' : 'transparent',
+                        transition: 'background-color 0.2s ease',
+                      }}
+                    >
+                      {displayTasks.length === 0 && column.tasks.length > 0 && (
+                        <div style={{ textAlign: 'center', padding: '24px 8px', color: '#94a3b8', fontSize: 13 }}>
+                          Không có thẻ phù hợp
+                        </div>
+                      )}
+                      {displayTasks.map((task: TaskItem, index: number) => {
+                        const canDrag = !isFiltered && (isOwnerOrAdmin || task.assignee?.id === currentUser?.id);
                       const taskMenuItems: MenuProps['items'] = [
                         {
                           key: 'delete',
@@ -542,8 +849,9 @@ export const KanbanBoardPage: React.FC = () => {
                   </div>
                 )}
               </Droppable>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </DragDropContext>
 
@@ -646,7 +954,22 @@ export const KanbanBoardPage: React.FC = () => {
         ) : taskDetail ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <Title level={4} style={{ marginBottom: 8 }}>
+              <Title
+                level={4}
+                style={{ marginBottom: 8 }}
+                editable={
+                  canEditTask
+                    ? {
+                        onChange: (newTitle) => {
+                          const trimmed = newTitle.trim();
+                          if (trimmed && trimmed !== taskDetail.title) {
+                            handleUpdateTaskField({ title: trimmed }, 'Đã cập nhật tiêu đề công việc');
+                          }
+                        },
+                      }
+                    : false
+                }
+              >
                 {taskDetail.title}
               </Title>
               <Space wrap size={[8, 8]}>
@@ -683,26 +1006,42 @@ export const KanbanBoardPage: React.FC = () => {
 
               <Text type="secondary">Mức độ ưu tiên:</Text>
               <div>
-                <Tag color={priorityColors[taskDetail.priority]} style={{ margin: 0 }}>
-                  {priorityLabels[taskDetail.priority]}
-                </Tag>
+                <Select
+                  size="small"
+                  value={taskDetail.priority}
+                  disabled={!canEditTask || savingTask}
+                  style={{ width: 180 }}
+                  onChange={(value) => handleUpdateTaskField({ priority: value }, 'Đã cập nhật mức độ ưu tiên')}
+                >
+                  <Select.Option value="LOW">Thấp</Select.Option>
+                  <Select.Option value="MEDIUM">Trung bình</Select.Option>
+                  <Select.Option value="HIGH">Cao</Select.Option>
+                  <Select.Option value="URGENT">Khẩn cấp</Select.Option>
+                </Select>
               </div>
 
               <Text type="secondary">Người thực hiện:</Text>
               <div>
-                {taskDetail.assignee ? (
-                  <Space size={8}>
-                    <Avatar
-                      size={20}
-                      icon={<UserOutlined />}
-                      src={taskDetail.assignee.avatarUrl}
-                      style={{ backgroundColor: '#4f46e5' }}
-                    />
-                    <Text strong>{taskDetail.assignee.fullName}</Text>
-                  </Space>
-                ) : (
-                  <Text type="secondary">Chưa phân công</Text>
-                )}
+                <Select
+                  size="small"
+                  allowClear
+                  placeholder="Chưa phân công"
+                  value={taskDetail.assignee?.id}
+                  disabled={!canEditTask || savingTask}
+                  style={{ width: 220 }}
+                  onChange={(value) =>
+                    handleUpdateTaskField({ assigneeId: value || null }, 'Đã cập nhật người thực hiện')
+                  }
+                >
+                  {project.members.map((m) => (
+                    <Select.Option key={m.user.id} value={m.user.id}>
+                      <Space size={6}>
+                        <Avatar size={16} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                        <span>{m.user.fullName}</span>
+                      </Space>
+                    </Select.Option>
+                  ))}
+                </Select>
               </div>
 
               <Text type="secondary">Hạn chót:</Text>
@@ -713,6 +1052,7 @@ export const KanbanBoardPage: React.FC = () => {
                   format="DD/MM/YYYY"
                   value={taskDetail.dueDate ? dayjs(taskDetail.dueDate) : null}
                   onChange={handleUpdateDueDate}
+                  disabled={!canEditTask || savingTask}
                   style={{ width: 180 }}
                   size="small"
                 />
@@ -731,27 +1071,178 @@ export const KanbanBoardPage: React.FC = () => {
             </div>
 
             <div>
-              <Text strong style={{ display: 'block', marginBottom: 6 }}>
-                Mô tả
-              </Text>
-              <div
-                style={{
-                  background: '#f8fafc',
-                  padding: 12,
-                  borderRadius: 8,
-                  minHeight: 60,
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {taskDetail.description ? (
-                  <Paragraph style={{ margin: 0 }}>{taskDetail.description}</Paragraph>
-                ) : (
-                  <Text type="secondary">Chưa có mô tả chi tiết</Text>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text strong>Mô tả</Text>
+                {canEditTask && !editingDescription && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setDescriptionDraft(taskDetail.description || '');
+                      setEditingDescription(true);
+                    }}
+                  >
+                    Sửa
+                  </Button>
                 )}
               </div>
+
+              {editingDescription ? (
+                <div>
+                  <Input.TextArea
+                    rows={4}
+                    value={descriptionDraft}
+                    onChange={(e) => setDescriptionDraft(e.target.value)}
+                    placeholder="Nhập mô tả chi tiết công việc..."
+                  />
+                  <div style={{ textAlign: 'right', marginTop: 8 }}>
+                    <Space>
+                      <Button size="small" onClick={() => setEditingDescription(false)}>
+                        Hủy
+                      </Button>
+                      <Button
+                        type="primary"
+                        size="small"
+                        loading={savingTask}
+                        onClick={async () => {
+                          await handleUpdateTaskField({ description: descriptionDraft }, 'Đã cập nhật mô tả');
+                          setEditingDescription(false);
+                        }}
+                      >
+                        Lưu
+                      </Button>
+                    </Space>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    padding: 12,
+                    borderRadius: 8,
+                    minHeight: 60,
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {taskDetail.description ? (
+                    <Paragraph style={{ margin: 0 }}>{taskDetail.description}</Paragraph>
+                  ) : (
+                    <Text type="secondary">Chưa có mô tả chi tiết</Text>
+                  )}
+                </div>
+              )}
             </div>
 
-            <Divider style={{ margin: '8px 0' }} />
+            <Divider style={{ margin: '4px 0' }} />
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Title level={5} style={{ margin: 0 }}>
+                  Tệp đính kèm ({taskDetail.attachments?.length || 0})
+                </Title>
+                {canEditTask && (
+                  <Upload
+                    showUploadList={false}
+                    beforeUpload={(file) => {
+                      handleUploadAttachment(file);
+                      return false;
+                    }}
+                  >
+                    <Button size="small" icon={<UploadOutlined />} loading={uploadingFile}>
+                      Tải tệp lên
+                    </Button>
+                  </Upload>
+                )}
+              </div>
+
+              {!taskDetail.attachments || taskDetail.attachments.length === 0 ? (
+                <div
+                  style={{
+                    padding: '14px',
+                    background: '#f8fafc',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                    color: '#94a3b8',
+                    fontSize: 13,
+                  }}
+                >
+                  Chưa có tệp đính kèm nào
+                </div>
+              ) : (
+                <List
+                  size="small"
+                  dataSource={taskDetail.attachments}
+                  renderItem={(file) => {
+                    const isImage = file.mimeType?.startsWith('image/');
+                    const fullUrl = `http://localhost:3000${file.fileUrl}`;
+                    const canDeleteFile = currentUser?.id === file.uploadedBy.id || isOwnerOrAdmin;
+
+                    return (
+                      <List.Item
+                        key={file.id}
+                        style={{
+                          padding: '8px 12px',
+                          background: '#f8fafc',
+                          borderRadius: 8,
+                          marginBottom: 8,
+                          border: '1px solid #f1f5f9',
+                        }}
+                        actions={[
+                          ...(canDeleteFile
+                            ? [
+                                <Popconfirm
+                                  key="delete"
+                                  title="Xóa tệp đính kèm"
+                                  description="Bạn có chắc chắn muốn xóa tệp này?"
+                                  onConfirm={() => handleDeleteAttachment(file.id)}
+                                  okText="Xóa"
+                                  cancelText="Hủy"
+                                >
+                                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                                </Popconfirm>,
+                              ]
+                            : []),
+                        ]}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            isImage ? (
+                              <Image
+                                width={40}
+                                height={40}
+                                src={fullUrl}
+                                style={{ objectFit: 'cover', borderRadius: 6 }}
+                              />
+                            ) : (
+                              <Avatar
+                                shape="square"
+                                size={40}
+                                icon={isImage ? <FileImageOutlined /> : <FileOutlined />}
+                                style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}
+                              />
+                            )
+                          }
+                          title={
+                            <a href={fullUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 500 }}>
+                              {file.fileName}
+                            </a>
+                          }
+                          description={
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                              {formatFileSize(file.fileSize)} • {file.uploadedBy.fullName} •{' '}
+                              {new Date(file.createdAt).toLocaleString('vi-VN')}
+                            </Text>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                />
+              )}
+            </div>
+
+            <Divider style={{ margin: '4px 0' }} />
 
             <div>
               <Title level={5} style={{ marginBottom: 12 }}>
@@ -1058,6 +1549,54 @@ export const KanbanBoardPage: React.FC = () => {
           )}
         </div>
       </Drawer>
+
+      <Modal
+        title={editingColumn ? 'Chỉnh sửa cột trạng thái' : 'Thêm cột trạng thái mới'}
+        open={isColumnModalOpen}
+        onCancel={() => setIsColumnModalOpen(false)}
+        onOk={handleSaveColumn}
+        confirmLoading={savingColumn}
+        okText={editingColumn ? 'Lưu thay đổi' : 'Thêm cột'}
+        cancelText="Hủy"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 6 }}>
+              Tên cột
+            </Text>
+            <Input
+              placeholder="Ví dụ: Đang kiểm thử (QA)"
+              value={columnTitleInput}
+              onChange={(e) => setColumnTitleInput(e.target.value)}
+              onPressEnter={handleSaveColumn}
+              maxLength={100}
+            />
+          </div>
+
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              Màu nhận diện
+            </Text>
+            <Space size={10} wrap>
+              {columnColors.map((hex) => (
+                <div
+                  key={hex}
+                  onClick={() => setColumnColorInput(hex)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    backgroundColor: hex,
+                    cursor: 'pointer',
+                    border: columnColorInput === hex ? '3px solid #0f172a' : '2px solid transparent',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                  }}
+                />
+              ))}
+            </Space>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

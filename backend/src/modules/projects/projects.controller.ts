@@ -7,6 +7,9 @@ import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
+import { CreateColumnDto } from './dto/create-column.dto';
+import { UpdateColumnDto } from './dto/update-column.dto';
 
 @ApiTags('Projects (Quản lý Dự án)')
 @ApiBearerAuth()
@@ -62,6 +65,47 @@ export class ProjectsController {
         @Req() req: any,
     ) {
         return this.projectsService.removeMember(id, req.user.id, targetUserId);
+    }
+
+    @Post(':id/columns')
+    @ApiOperation({ summary: 'Thêm cột trạng thái mới vào bảng Kanban (OWNER/ADMIN)' })
+    createColumn(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @Body() dto: CreateColumnDto,
+    ) {
+        return this.projectsService.createColumn(id, req.user.id, dto);
+    }
+
+    @Patch(':id/columns/:columnId')
+    @ApiOperation({ summary: 'Cập nhật tên, màu hoặc vị trí cột Kanban (OWNER/ADMIN)' })
+    updateColumn(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('columnId', ParseUUIDPipe) columnId: string,
+        @Req() req: any,
+        @Body() dto: UpdateColumnDto,
+    ) {
+        return this.projectsService.updateColumn(id, columnId, req.user.id, dto);
+    }
+
+    @Delete(':id/columns/:columnId')
+    @ApiOperation({ summary: 'Xóa cột Kanban trống (OWNER/ADMIN)' })
+    deleteColumn(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Param('columnId', ParseUUIDPipe) columnId: string,
+        @Req() req: any,
+    ) {
+        return this.projectsService.deleteColumn(id, columnId, req.user.id);
+    }
+
+    @Patch(':id')
+    @ApiOperation({ summary: 'Cập nhật thông tin dự án (OWNER/ADMIN)' })
+    update(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @Body() dto: UpdateProjectDto,
+    ) {
+        return this.projectsService.update(id, req.user.id, dto);
     }
 
     @Delete(':id')

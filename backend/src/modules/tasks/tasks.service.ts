@@ -1,4 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { unlinkSync } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -190,7 +192,13 @@ export class TasksService {
             throw new NotFoundException('Không tìm thấy công việc');
         }
 
-        await this.projectsService.verifyProjectMember(task.projectId, userId);
+        const member = await this.projectsService.verifyProjectMember(task.projectId, userId);
+        if (member.role === 'VIEWER') {
+            throw new ForbiddenException('Người xem (VIEWER) không có quyền chỉnh sửa công việc');
+        }
+
+        const dueDateValue =
+            dto.dueDate === undefined ? undefined : dto.dueDate === null ? null : new Date(dto.dueDate);
 
         const updated = await this.prisma.task.update({
             where: { id: taskId },
@@ -199,10 +207,17 @@ export class TasksService {
                 description: dto.description,
                 priority: dto.priority,
                 assigneeId: dto.assigneeId,
-                dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+                dueDate: dueDateValue,
             },
             include: {
                 project: { select: { id: true, name: true, key: true } },
+                column: { select: { id: true, title: true, color: true } },
+                assignee: {
+                    select: { id: true, fullName: true, email: true, avatarUrl: true },
+                },
+                reporter: {
+                    select: { id: true, fullName: true, email: true, avatarUrl: true },
+                },
             },
         });
 
@@ -219,6 +234,84 @@ export class TasksService {
         return updated;
     }
 
+    async uploadAttachment(taskId: string, userId: string, file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn tệp để tải lên');
+        }
+
+        const task = await this.prisma.task.findUnique({
+            where: { id: taskId },
+        });
+        if (!task) {
+            throw new NotFoundException('Không tìm thấy công việc');
+        }
+
+        const member = await this.projectsService.verifyProjectMember(task.projectId, userId);
+        if (member.role === 'VIEWER') {
+            throw new ForbiddenException('Người xem (VIEWER) không có quyền tải tệp đính kèm');
+        }
+
+        const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+        const attachment = await this.prisma.taskAttachment.create({
+            data: {
+                taskId,
+                uploadedById: userId,
+                fileName: decodedName,
+                fileUrl: `/uploads/${file.filename}`,
+                fileSize: file.size,
+                mimeType: file.mimetype,
+            },
+            include: {
+                uploadedBy: { select: { id: true, fullName: true } },
+            },
+        });
+
+        await this.prisma.activityLog.create({
+            data: {
+                projectId: task.projectId,
+                taskId,
+                userId,
+                action: 'ATTACHED_FILE',
+                newValue: { fileName: decodedName },
+            },
+        });
+
+        return attachment;
+    }
+
+    async removeAttachment(attachmentId: string, userId: string) {
+        const attachment = await this.prisma.taskAttachment.findUnique({
+            where: { id: attachmentId },
+            include: {
+                task: { select: { projectId: true } },
+            },
+        });
+
+        if (!attachment) {
+            throw new NotFoundException('Không tìm thấy tệp đính kèm');
+        }
+
+        const member = await this.projectsService.verifyProjectMember(attachment.task.projectId, userId);
+        const isOwnerOrAdmin = member.role === 'OWNER' || member.role === 'ADMIN';
+        if (attachment.uploadedById !== userId && !isOwnerOrAdmin) {
+            throw new ForbiddenException('Bạn không có quyền xóa tệp đính kèm này');
+        }
+
+        const fileName = attachment.fileUrl.replace(/^\/uploads\//, '');
+        const filePath = join(process.cwd(), 'uploads', fileName);
+        try {
+            unlinkSync(filePath);
+        } catch {
+        }
+
+        await this.prisma.taskAttachment.delete({
+            where: { id: attachmentId },
+        });
+
+        return { message: 'Đã xóa tệp đính kèm thành công' };
+    }
+
     async remove(taskId: string, userId: string) {
         const task = await this.prisma.task.findUnique({
             where: { id: taskId },
@@ -227,7 +320,10 @@ export class TasksService {
             throw new NotFoundException('Không tìm thấy công việc');
         }
 
-        await this.projectsService.verifyProjectMember(task.projectId, userId);
+        const member = await this.projectsService.verifyProjectMember(task.projectId, userId);
+        if (member.role === 'VIEWER') {
+            throw new ForbiddenException('Người xem (VIEWER) không có quyền xóa công việc');
+        }
 
         await this.prisma.task.delete({
             where: { id: taskId },
