@@ -75,6 +75,17 @@ const roleLabels: Record<string, { label: string; color: string }> = {
   VIEWER: { label: 'Chỉ xem', color: 'default' },
 };
 
+const columnColors = [
+  '#64748b',
+  '#3b82f6',
+  '#f59e0b',
+  '#22c55e',
+  '#8b5cf6',
+  '#ec4899',
+  '#ef4444',
+  '#06b6d4',
+];
+
 export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -104,6 +115,12 @@ export const KanbanBoardPage: React.FC = () => {
   const [filterSearch, setFilterSearch] = useState('');
   const [filterPriority, setFilterPriority] = useState<string>('ALL');
   const [filterOnlyMyTasks, setFilterOnlyMyTasks] = useState(false);
+
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<ColumnItem | null>(null);
+  const [columnTitleInput, setColumnTitleInput] = useState('');
+  const [columnColorInput, setColumnColorInput] = useState('#64748b');
+  const [savingColumn, setSavingColumn] = useState(false);
 
   const fetchProjectDetail = async () => {
     if (!id) return;
@@ -369,6 +386,79 @@ export const KanbanBoardPage: React.FC = () => {
     }
   };
 
+  const handleOpenCreateColumn = () => {
+    setEditingColumn(null);
+    setColumnTitleInput('');
+    setColumnColorInput('#64748b');
+    setIsColumnModalOpen(true);
+  };
+
+  const handleOpenEditColumn = (column: ColumnItem) => {
+    setEditingColumn(column);
+    setColumnTitleInput(column.title);
+    setColumnColorInput(column.color || '#64748b');
+    setIsColumnModalOpen(true);
+  };
+
+  const handleSaveColumn = async () => {
+    if (!project) return;
+    if (!columnTitleInput.trim()) {
+      message.warning('Vui lòng nhập tên cột');
+      return;
+    }
+    try {
+      setSavingColumn(true);
+      if (editingColumn) {
+        await projectsApi.updateColumn(project.id, editingColumn.id, {
+          title: columnTitleInput.trim(),
+          color: columnColorInput,
+        });
+        message.success('Đã cập nhật cột trạng thái');
+      } else {
+        await projectsApi.createColumn(project.id, {
+          title: columnTitleInput.trim(),
+          color: columnColorInput,
+        });
+        message.success('Đã thêm cột trạng thái mới');
+      }
+      setIsColumnModalOpen(false);
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể lưu cột trạng thái');
+    } finally {
+      setSavingColumn(false);
+    }
+  };
+
+  const handleDeleteColumn = (column: ColumnItem) => {
+    if (!project) return;
+    if (project.columns.length <= 1) {
+      message.warning('Dự án phải giữ lại ít nhất 1 cột trạng thái');
+      return;
+    }
+    if (column.tasks.length > 0) {
+      message.warning('Vui lòng di chuyển hết công việc sang cột khác trước khi xóa cột này');
+      return;
+    }
+
+    Modal.confirm({
+      title: `Xóa cột "${column.title}"?`,
+      content: 'Thao tác này sẽ xóa cột trạng thái khỏi bảng Kanban.',
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await projectsApi.deleteColumn(project.id, column.id);
+          message.success('Đã xóa cột trạng thái');
+          fetchProjectDetail();
+        } catch (err: any) {
+          message.error(err.message || 'Không thể xóa cột trạng thái');
+        }
+      },
+    });
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
@@ -464,6 +554,16 @@ export const KanbanBoardPage: React.FC = () => {
           >
             Thành viên ({project.members.length})
           </Button>
+
+          {isOwnerOrAdmin && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenCreateColumn}
+            >
+              Thêm cột
+            </Button>
+          )}
         </Space>
       </div>
 
@@ -540,16 +640,34 @@ export const KanbanBoardPage: React.FC = () => {
             gap: 16,
             width: '100%',
             alignItems: 'flex-start',
+            overflowX: 'auto',
+            paddingBottom: 12,
           }}
         >
           {project.columns.map((column: ColumnItem) => {
             const displayTasks = getFilteredTasks(column.tasks);
+            const columnMenuItems: MenuProps['items'] = [
+              {
+                key: 'edit',
+                label: 'Chỉnh sửa cột',
+                icon: <EditOutlined />,
+                onClick: () => handleOpenEditColumn(column),
+              },
+              {
+                key: 'delete',
+                label: 'Xóa cột',
+                danger: true,
+                icon: <DeleteOutlined />,
+                onClick: () => handleDeleteColumn(column),
+              },
+            ];
+
             return (
               <div
                 key={column.id}
                 style={{
-                  flex: 1,
-                  minWidth: 0,
+                  flex: '1 0 280px',
+                  minWidth: 280,
                   background: '#f8fafc',
                   borderRadius: 12,
                   border: '1px solid #e2e8f0',
@@ -588,12 +706,17 @@ export const KanbanBoardPage: React.FC = () => {
                   </Space>
 
                   {isOwnerOrAdmin && (
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => handleOpenCreateTask(column.id)}
-                    />
+                    <Space size={2}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => handleOpenCreateTask(column.id)}
+                      />
+                      <Dropdown menu={{ items: columnMenuItems }} trigger={['click']}>
+                        <Button type="text" size="small" icon={<MoreOutlined />} />
+                      </Dropdown>
+                    </Space>
                   )}
                 </div>
 
@@ -1422,6 +1545,54 @@ export const KanbanBoardPage: React.FC = () => {
           )}
         </div>
       </Drawer>
+
+      <Modal
+        title={editingColumn ? 'Chỉnh sửa cột trạng thái' : 'Thêm cột trạng thái mới'}
+        open={isColumnModalOpen}
+        onCancel={() => setIsColumnModalOpen(false)}
+        onOk={handleSaveColumn}
+        confirmLoading={savingColumn}
+        okText={editingColumn ? 'Lưu thay đổi' : 'Thêm cột'}
+        cancelText="Hủy"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 6 }}>
+              Tên cột
+            </Text>
+            <Input
+              placeholder="Ví dụ: Đang kiểm thử (QA)"
+              value={columnTitleInput}
+              onChange={(e) => setColumnTitleInput(e.target.value)}
+              onPressEnter={handleSaveColumn}
+              maxLength={100}
+            />
+          </div>
+
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              Màu nhận diện
+            </Text>
+            <Space size={10} wrap>
+              {columnColors.map((hex) => (
+                <div
+                  key={hex}
+                  onClick={() => setColumnColorInput(hex)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    backgroundColor: hex,
+                    cursor: 'pointer',
+                    border: columnColorInput === hex ? '3px solid #0f172a' : '2px solid transparent',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                  }}
+                />
+              ))}
+            </Space>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

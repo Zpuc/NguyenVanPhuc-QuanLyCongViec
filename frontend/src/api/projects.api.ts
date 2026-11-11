@@ -87,6 +87,17 @@ export interface AddMemberDto {
   role: 'ADMIN' | 'MEMBER' | 'VIEWER';
 }
 
+export interface CreateColumnDto {
+  title: string;
+  color?: string;
+}
+
+export interface UpdateColumnDto {
+  title?: string;
+  color?: string;
+  positionOrder?: number;
+}
+
 export const projectsApi = {
   getAllMyProjects: (): Promise<ProjectItem[]> => {
     return axiosClient.get('/projects');
@@ -118,5 +129,17 @@ export const projectsApi = {
 
   removeMember: (projectId: string, userId: string) => {
     return axiosClient.delete(`/projects/${projectId}/members/${userId}`);
+  },
+
+  createColumn: (projectId: string, data: CreateColumnDto): Promise<ColumnItem> => {
+    return axiosClient.post(`/projects/${projectId}/columns`, data);
+  },
+
+  updateColumn: (projectId: string, columnId: string, data: UpdateColumnDto): Promise<ColumnItem> => {
+    return axiosClient.patch(`/projects/${projectId}/columns/${columnId}`, data);
+  },
+
+  deleteColumn: (projectId: string, columnId: string) => {
+    return axiosClient.delete(`/projects/${projectId}/columns/${columnId}`);
   },
 };

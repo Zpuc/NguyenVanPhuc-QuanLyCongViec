@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, Button, theme, Badge, Popover, List, Spin, Empty } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Button, theme, Badge, Popover, List, Spin, Empty, notification } from 'antd';
 import type { MenuProps } from 'antd';
+import { io } from 'socket.io-client';
 import {
   AppstoreOutlined,
   ProjectOutlined,
@@ -28,7 +29,7 @@ export const MainLayout: React.FC = () => {
     const [loadingNotifications, setLoadingNotifications] = useState<boolean>(false);
     const [popoverOpen, setPopoverOpen] = useState<boolean>(false);
 
-    const { user, isAuthenticated, logout } = useAuthStore();
+    const { user, token, isAuthenticated, logout } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
     const {
@@ -55,11 +56,45 @@ export const MainLayout: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated || !token) return;
+
         fetchUnreadCount();
-        const interval = setInterval(fetchUnreadCount, 15000);
-        return () => clearInterval(interval);
-    }, [isAuthenticated]);
+
+        const socket = io('http://localhost:3000', {
+            auth: { token },
+            transports: ['websocket', 'polling'],
+        });
+
+        socket.on('connect', () => {
+            fetchUnreadCount();
+        });
+
+        socket.on('notification:new', (incoming: NotificationItem) => {
+            setUnreadCount((prev) => prev + 1);
+            setNotifications((prev) => {
+                if (prev.some((n) => n.id === incoming.id)) {
+                    return prev;
+                }
+                return [incoming, ...prev].slice(0, 20);
+            });
+
+            notification.info({
+                message: incoming.title,
+                description: incoming.content,
+                placement: 'topRight',
+                duration: 4,
+                onClick: () => {
+                    if (incoming.metadata?.projectId) {
+                        navigate(`/projects/${incoming.metadata.projectId}`);
+                    }
+                },
+            });
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [isAuthenticated, token]);
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
