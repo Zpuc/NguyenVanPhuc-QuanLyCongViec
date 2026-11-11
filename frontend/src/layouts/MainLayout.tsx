@@ -288,7 +288,7 @@ export const MainLayout: React.FC = () => {
                 />
             </Sider>
 
-            <Layout>
+            <Layout style={{ minWidth: 0 }}>
                 <Header
                     style={{
                         padding: '0 24px',

@@ -666,8 +666,8 @@ export const KanbanBoardPage: React.FC = () => {
               <div
                 key={column.id}
                 style={{
-                  flex: '1 0 280px',
-                  minWidth: 280,
+                  flex: '1 0 230px',
+                  minWidth: 230,
                   background: '#f8fafc',
                   borderRadius: 12,
                   border: '1px solid #e2e8f0',
@@ -682,31 +682,35 @@ export const KanbanBoardPage: React.FC = () => {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
+                    gap: 8,
                     borderBottom: '1px solid #e2e8f0',
                     background: '#ffffff',
                     borderTopLeftRadius: 12,
                     borderTopRightRadius: 12,
                   }}
                 >
-                  <Space>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
                     <div
                       style={{
                         width: 10,
                         height: 10,
                         borderRadius: '50%',
+                        flexShrink: 0,
                         background: column.color || '#3b82f6',
                       }}
                     />
-                    <Text strong>{column.title}</Text>
-                    <Tag style={{ borderRadius: 10 }}>
+                    <Text strong ellipsis={{ tooltip: column.title }}>
+                      {column.title}
+                    </Text>
+                    <Tag style={{ borderRadius: 10, marginInlineEnd: 0, flexShrink: 0 }}>
                       {displayTasks.length === column.tasks.length
                         ? column.tasks.length
                         : `${displayTasks.length}/${column.tasks.length}`}
                     </Tag>
-                  </Space>
+                  </div>
 
                   {isOwnerOrAdmin && (
-                    <Space size={2}>
+                    <Space size={2} style={{ flexShrink: 0 }}>
                       <Button
                         type="text"
                         size="small"
