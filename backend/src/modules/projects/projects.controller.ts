@@ -7,6 +7,7 @@ import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 
 @ApiTags('Projects (Quản lý Dự án)')
 @ApiBearerAuth()
@@ -62,6 +63,16 @@ export class ProjectsController {
         @Req() req: any,
     ) {
         return this.projectsService.removeMember(id, req.user.id, targetUserId);
+    }
+
+    @Patch(':id')
+    @ApiOperation({ summary: 'Cập nhật thông tin dự án (OWNER/ADMIN)' })
+    update(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @Body() dto: UpdateProjectDto,
+    ) {
+        return this.projectsService.update(id, req.user.id, dto);
     }
 
     @Delete(':id')

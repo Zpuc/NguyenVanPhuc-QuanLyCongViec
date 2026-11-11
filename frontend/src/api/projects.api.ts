@@ -77,6 +77,11 @@ export interface CreateProjectDto {
   description?: string;
 }
 
+export interface UpdateProjectDto {
+  name?: string;
+  description?: string;
+}
+
 export interface AddMemberDto {
   email: string;
   role: 'ADMIN' | 'MEMBER' | 'VIEWER';
@@ -93,6 +98,14 @@ export const projectsApi = {
 
   createProject: (data: CreateProjectDto): Promise<ProjectItem> => {
     return axiosClient.post('/projects', data);
+  },
+
+  updateProject: (id: string, data: UpdateProjectDto): Promise<ProjectItem> => {
+    return axiosClient.patch(`/projects/${id}`, data);
+  },
+
+  deleteProject: (id: string) => {
+    return axiosClient.delete(`/projects/${id}`);
   },
 
   addMember: (projectId: string, data: AddMemberDto) => {

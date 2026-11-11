@@ -1,6 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Typography, Button, Row, Col, Card, Tag, Space, Modal, Form, Input, message, Spin, Empty } from 'antd';
-import { PlusOutlined, TeamOutlined, CheckSquareOutlined } from '@ant-design/icons';
+import {
+  Typography,
+  Button,
+  Row,
+  Col,
+  Card,
+  Tag,
+  Space,
+  Modal,
+  Form,
+  Input,
+  message,
+  Spin,
+  Empty,
+  Popconfirm,
+  Tooltip,
+} from 'antd';
+import { PlusOutlined, TeamOutlined, CheckSquareOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectItem, CreateProjectDto } from '../../api/projects.api';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +28,7 @@ export const ProjectsPage: React.FC = () => {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
@@ -34,21 +51,56 @@ export const ProjectsPage: React.FC = () => {
     fetchProjects();
   }, []);
 
-  const handleCreate = async (values: CreateProjectDto) => {
+  const handleOpenCreateModal = () => {
+    setEditingProject(null);
+    form.resetFields();
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (project: ProjectItem) => {
+    setEditingProject(project);
+    form.setFieldsValue({
+      name: project.name,
+      key: project.key,
+      description: project.description,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (values: CreateProjectDto) => {
     try {
       setSubmitting(true);
-      await projectsApi.createProject({
-        ...values,
-        key: values.key.toUpperCase().trim(),
-      });
-      message.success('Tạo dự án mới thành công!');
+      if (editingProject) {
+        await projectsApi.updateProject(editingProject.id, {
+          name: values.name,
+          description: values.description,
+        });
+        message.success('Cập nhật dự án thành công!');
+      } else {
+        await projectsApi.createProject({
+          ...values,
+          key: values.key.toUpperCase().trim(),
+        });
+        message.success('Tạo dự án mới thành công!');
+      }
       setIsModalOpen(false);
+      setEditingProject(null);
       form.resetFields();
       fetchProjects();
     } catch (err: any) {
-      message.error(err.message || 'Tạo dự án thất bại. Mã Key có thể đã tồn tại!');
+      message.error(err.message || (editingProject ? 'Cập nhật dự án thất bại!' : 'Tạo dự án thất bại. Mã Key có thể đã tồn tại!'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await projectsApi.deleteProject(projectId);
+      message.success('Đã xóa dự án thành công');
+      fetchProjects();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể xóa dự án');
     }
   };
 
@@ -79,7 +131,7 @@ export const ProjectsPage: React.FC = () => {
             style={{ width: 260 }}
             size="large"
           />
-          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalOpen(true)}>
+          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={handleOpenCreateModal}>
             Tạo dự án mới
           </Button>
         </Space>
@@ -89,7 +141,7 @@ export const ProjectsPage: React.FC = () => {
         <div style={{ textAlign: 'center', padding: '60px 0' }}><Spin size="large" /></div>
       ) : myProjects.length === 0 ? (
         <Empty description="Bạn chưa làm chủ dự án nào" style={{ padding: '40px 0' }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateModal}>
             Tạo dự án đầu tiên
           </Button>
         </Empty>
@@ -104,15 +156,36 @@ export const ProjectsPage: React.FC = () => {
                 style={{ borderRadius: 12, cursor: 'pointer' }}
                 onClick={() => navigate(`/projects/${p.id}`)}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Tag color="blue" style={{ fontWeight: 'bold' }}>{p.key}</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Chủ dự án: {p.owner.fullName}</Text>
+                  <Space size={4} onClick={(e) => e.stopPropagation()}>
+                    <Tooltip title="Sửa dự án">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => handleOpenEditModal(p)}
+                      />
+                    </Tooltip>
+                    <Popconfirm
+                      title="Xóa dự án"
+                      description="Tất cả cột và công việc trong dự án sẽ bị xóa vĩnh viễn. Tiếp tục?"
+                      onConfirm={() => handleDeleteProject(p.id)}
+                      okText="Xóa"
+                      cancelText="Hủy"
+                    >
+                      <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
                 </div>
                 <Title level={4} style={{ margin: '8px 0' }}>{p.name}</Title>
                 <Paragraph type="secondary" ellipsis={{ rows: 2 }}>{p.description || 'Chưa có mô tả'}</Paragraph>
-                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, display: 'flex', gap: 16 }}>
-                  <Text type="secondary"><TeamOutlined /> {p._count.members} thành viên</Text>
-                  <Text type="secondary"><CheckSquareOutlined /> {p._count.tasks} công việc</Text>
+                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Space size={16}>
+                    <Text type="secondary"><TeamOutlined /> {p._count.members} thành viên</Text>
+                    <Text type="secondary"><CheckSquareOutlined /> {p._count.tasks} công việc</Text>
+                  </Space>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Chủ: {p.owner.fullName}</Text>
                 </div>
               </Card>
             </Col>
@@ -121,26 +194,38 @@ export const ProjectsPage: React.FC = () => {
       )}
 
       <Modal
-        title="Tạo dự án mới"
+        title={editingProject ? 'Chỉnh sửa dự án' : 'Tạo dự án mới'}
         open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={() => {
+          setIsModalOpen(false);
+          setEditingProject(null);
+        }}
         footer={null}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item name="name" label="Tên dự án" rules={[{ required: true, message: 'Nhập tên dự án!' }]}>
             <Input placeholder="Ví dụ: Ứng dụng Quản lý Bán hàng" size="large" />
           </Form.Item>
           <Form.Item name="key" label="Mã viết tắt (Key)" rules={[{ required: true, message: 'Nhập mã key!' }]}>
-            <Input placeholder="Ví dụ: WEB, APP, ERP" size="large" />
+            <Input placeholder="Ví dụ: WEB, APP, ERP" size="large" disabled={!!editingProject} />
           </Form.Item>
           <Form.Item name="description" label="Mô tả">
             <Input.TextArea rows={3} placeholder="Mô tả ngắn gọn về dự án..." />
           </Form.Item>
           <div style={{ textAlign: 'right' }}>
             <Space>
-              <Button onClick={() => setIsModalOpen(false)}>Hủy</Button>
-              <Button type="primary" htmlType="submit" loading={submitting}>Tạo dự án</Button>
+              <Button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingProject(null);
+                }}
+              >
+                Hủy
+              </Button>
+              <Button type="primary" htmlType="submit" loading={submitting}>
+                {editingProject ? 'Lưu thay đổi' : 'Tạo dự án'}
+              </Button>
             </Space>
           </div>
         </Form>

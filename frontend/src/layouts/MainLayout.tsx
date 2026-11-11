@@ -126,6 +126,15 @@ export const MainLayout: React.FC = () => {
 
     const userMenuItems: MenuProps['items'] = [
         {
+            key: 'profile',
+            icon: <UserOutlined />,
+            label: 'Hồ sơ cá nhân',
+            onClick: () => navigate('/profile'),
+        },
+        {
+            type: 'divider',
+        },
+        {
             key: 'logout',
             icon: <LogoutOutlined />,
             label: 'Đăng xuất',

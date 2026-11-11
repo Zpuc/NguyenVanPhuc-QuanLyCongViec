@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ProjectRole } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -248,6 +249,22 @@ export class ProjectsService {
         ]);
 
         return { message: 'Đã xóa thành viên khỏi dự án thành công' };
+    }
+
+    async update(projectId: string, userId: string, dto: UpdateProjectDto) {
+        const member = await this.verifyProjectMember(projectId, userId);
+
+        if (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.ADMIN) {
+            throw new ForbiddenException('Chỉ Chủ dự án (OWNER) hoặc Quản trị viên (ADMIN) mới có quyền sửa thông tin dự án');
+        }
+
+        return this.prisma.project.update({
+            where: { id: projectId },
+            data: {
+                name: dto.name,
+                description: dto.description,
+            },
+        });
     }
 
     async remove(projectId: string, userId: string) {

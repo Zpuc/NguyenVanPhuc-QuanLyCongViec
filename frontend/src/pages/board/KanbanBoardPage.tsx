@@ -21,6 +21,8 @@ import {
   List,
   Popconfirm,
   Tooltip,
+  Upload,
+  Image,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -37,13 +39,17 @@ import {
   UserAddOutlined,
   CrownOutlined,
   FilterOutlined,
+  EditOutlined,
+  UploadOutlined,
+  FileOutlined,
+  FileImageOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectDetail, ColumnItem, TaskItem } from '../../api/projects.api';
 import { tasksApi } from '../../api/tasks.api';
-import type { TaskDetail } from '../../api/tasks.api';
+import type { TaskDetail, UpdateTaskDto } from '../../api/tasks.api';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
@@ -85,6 +91,10 @@ export const KanbanBoardPage: React.FC = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   const [isMembersDrawerOpen, setIsMembersDrawerOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -218,9 +228,11 @@ export const KanbanBoardPage: React.FC = () => {
   const handleOpenTaskDetail = async (taskId: string) => {
     setSelectedTaskId(taskId);
     setDrawerLoading(true);
+    setEditingDescription(false);
     try {
       const data = await tasksApi.getTaskDetail(taskId);
       setTaskDetail(data);
+      setDescriptionDraft(data.description || '');
     } catch (err: any) {
       message.error(err.message || 'Không thể tải chi tiết công việc');
     } finally {
@@ -232,6 +244,7 @@ export const KanbanBoardPage: React.FC = () => {
     setSelectedTaskId(null);
     setTaskDetail(null);
     setCommentText('');
+    setEditingDescription(false);
   };
 
   const handleAddComment = async () => {
@@ -268,17 +281,70 @@ export const KanbanBoardPage: React.FC = () => {
     }
   };
 
-  const handleUpdateDueDate = async (date: dayjs.Dayjs | null) => {
+  const handleUpdateTaskField = async (payload: UpdateTaskDto, successMessage: string) => {
     if (!taskDetail) return;
     try {
-      const newDueDate = date ? date.toISOString() : undefined;
-      await tasksApi.updateTask(taskDetail.id, { dueDate: newDueDate });
-      setTaskDetail({ ...taskDetail, dueDate: newDueDate });
-      message.success('Đã cập nhật hạn chót');
+      setSavingTask(true);
+      const updated = await tasksApi.updateTask(taskDetail.id, payload);
+      setTaskDetail({
+        ...taskDetail,
+        title: updated.title,
+        description: updated.description,
+        priority: updated.priority,
+        dueDate: updated.dueDate,
+        assignee: updated.assignee,
+      });
+      message.success(successMessage);
       fetchProjectDetail();
     } catch (err: any) {
-      message.error(err.message || 'Cập nhật hạn chót thất bại');
+      message.error(err.message || 'Cập nhật công việc thất bại');
+    } finally {
+      setSavingTask(false);
     }
+  };
+
+  const handleUpdateDueDate = async (date: dayjs.Dayjs | null) => {
+    const newDueDate = date ? date.toISOString() : null;
+    await handleUpdateTaskField({ dueDate: newDueDate }, 'Đã cập nhật hạn chót');
+  };
+
+  const handleUploadAttachment = async (file: File) => {
+    if (!taskDetail) return;
+    try {
+      setUploadingFile(true);
+      const attachment = await tasksApi.uploadAttachment(taskDetail.id, file);
+      setTaskDetail({
+        ...taskDetail,
+        attachments: [attachment, ...(taskDetail.attachments || [])],
+      });
+      message.success('Tải lên tệp đính kèm thành công');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Tải lên tệp thất bại');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!taskDetail) return;
+    try {
+      await tasksApi.deleteAttachment(attachmentId);
+      setTaskDetail({
+        ...taskDetail,
+        attachments: taskDetail.attachments.filter((a) => a.id !== attachmentId),
+      });
+      message.success('Đã xóa tệp đính kèm');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Xóa tệp đính kèm thất bại');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleInviteMember = async () => {
@@ -318,6 +384,7 @@ export const KanbanBoardPage: React.FC = () => {
   const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
   const isOwner = currentMember?.role === 'OWNER';
   const isOwnerOrAdmin = isOwner || currentMember?.role === 'ADMIN';
+  const canEditTask = currentMember?.role !== 'VIEWER';
 
   const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
   const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
@@ -760,7 +827,22 @@ export const KanbanBoardPage: React.FC = () => {
         ) : taskDetail ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <Title level={4} style={{ marginBottom: 8 }}>
+              <Title
+                level={4}
+                style={{ marginBottom: 8 }}
+                editable={
+                  canEditTask
+                    ? {
+                        onChange: (newTitle) => {
+                          const trimmed = newTitle.trim();
+                          if (trimmed && trimmed !== taskDetail.title) {
+                            handleUpdateTaskField({ title: trimmed }, 'Đã cập nhật tiêu đề công việc');
+                          }
+                        },
+                      }
+                    : false
+                }
+              >
                 {taskDetail.title}
               </Title>
               <Space wrap size={[8, 8]}>
@@ -797,26 +879,42 @@ export const KanbanBoardPage: React.FC = () => {
 
               <Text type="secondary">Mức độ ưu tiên:</Text>
               <div>
-                <Tag color={priorityColors[taskDetail.priority]} style={{ margin: 0 }}>
-                  {priorityLabels[taskDetail.priority]}
-                </Tag>
+                <Select
+                  size="small"
+                  value={taskDetail.priority}
+                  disabled={!canEditTask || savingTask}
+                  style={{ width: 180 }}
+                  onChange={(value) => handleUpdateTaskField({ priority: value }, 'Đã cập nhật mức độ ưu tiên')}
+                >
+                  <Select.Option value="LOW">Thấp</Select.Option>
+                  <Select.Option value="MEDIUM">Trung bình</Select.Option>
+                  <Select.Option value="HIGH">Cao</Select.Option>
+                  <Select.Option value="URGENT">Khẩn cấp</Select.Option>
+                </Select>
               </div>
 
               <Text type="secondary">Người thực hiện:</Text>
               <div>
-                {taskDetail.assignee ? (
-                  <Space size={8}>
-                    <Avatar
-                      size={20}
-                      icon={<UserOutlined />}
-                      src={taskDetail.assignee.avatarUrl}
-                      style={{ backgroundColor: '#4f46e5' }}
-                    />
-                    <Text strong>{taskDetail.assignee.fullName}</Text>
-                  </Space>
-                ) : (
-                  <Text type="secondary">Chưa phân công</Text>
-                )}
+                <Select
+                  size="small"
+                  allowClear
+                  placeholder="Chưa phân công"
+                  value={taskDetail.assignee?.id}
+                  disabled={!canEditTask || savingTask}
+                  style={{ width: 220 }}
+                  onChange={(value) =>
+                    handleUpdateTaskField({ assigneeId: value || null }, 'Đã cập nhật người thực hiện')
+                  }
+                >
+                  {project.members.map((m) => (
+                    <Select.Option key={m.user.id} value={m.user.id}>
+                      <Space size={6}>
+                        <Avatar size={16} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                        <span>{m.user.fullName}</span>
+                      </Space>
+                    </Select.Option>
+                  ))}
+                </Select>
               </div>
 
               <Text type="secondary">Hạn chót:</Text>
@@ -827,6 +925,7 @@ export const KanbanBoardPage: React.FC = () => {
                   format="DD/MM/YYYY"
                   value={taskDetail.dueDate ? dayjs(taskDetail.dueDate) : null}
                   onChange={handleUpdateDueDate}
+                  disabled={!canEditTask || savingTask}
                   style={{ width: 180 }}
                   size="small"
                 />
@@ -845,27 +944,178 @@ export const KanbanBoardPage: React.FC = () => {
             </div>
 
             <div>
-              <Text strong style={{ display: 'block', marginBottom: 6 }}>
-                Mô tả
-              </Text>
-              <div
-                style={{
-                  background: '#f8fafc',
-                  padding: 12,
-                  borderRadius: 8,
-                  minHeight: 60,
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {taskDetail.description ? (
-                  <Paragraph style={{ margin: 0 }}>{taskDetail.description}</Paragraph>
-                ) : (
-                  <Text type="secondary">Chưa có mô tả chi tiết</Text>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text strong>Mô tả</Text>
+                {canEditTask && !editingDescription && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setDescriptionDraft(taskDetail.description || '');
+                      setEditingDescription(true);
+                    }}
+                  >
+                    Sửa
+                  </Button>
                 )}
               </div>
+
+              {editingDescription ? (
+                <div>
+                  <Input.TextArea
+                    rows={4}
+                    value={descriptionDraft}
+                    onChange={(e) => setDescriptionDraft(e.target.value)}
+                    placeholder="Nhập mô tả chi tiết công việc..."
+                  />
+                  <div style={{ textAlign: 'right', marginTop: 8 }}>
+                    <Space>
+                      <Button size="small" onClick={() => setEditingDescription(false)}>
+                        Hủy
+                      </Button>
+                      <Button
+                        type="primary"
+                        size="small"
+                        loading={savingTask}
+                        onClick={async () => {
+                          await handleUpdateTaskField({ description: descriptionDraft }, 'Đã cập nhật mô tả');
+                          setEditingDescription(false);
+                        }}
+                      >
+                        Lưu
+                      </Button>
+                    </Space>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    padding: 12,
+                    borderRadius: 8,
+                    minHeight: 60,
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {taskDetail.description ? (
+                    <Paragraph style={{ margin: 0 }}>{taskDetail.description}</Paragraph>
+                  ) : (
+                    <Text type="secondary">Chưa có mô tả chi tiết</Text>
+                  )}
+                </div>
+              )}
             </div>
 
-            <Divider style={{ margin: '8px 0' }} />
+            <Divider style={{ margin: '4px 0' }} />
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Title level={5} style={{ margin: 0 }}>
+                  Tệp đính kèm ({taskDetail.attachments?.length || 0})
+                </Title>
+                {canEditTask && (
+                  <Upload
+                    showUploadList={false}
+                    beforeUpload={(file) => {
+                      handleUploadAttachment(file);
+                      return false;
+                    }}
+                  >
+                    <Button size="small" icon={<UploadOutlined />} loading={uploadingFile}>
+                      Tải tệp lên
+                    </Button>
+                  </Upload>
+                )}
+              </div>
+
+              {!taskDetail.attachments || taskDetail.attachments.length === 0 ? (
+                <div
+                  style={{
+                    padding: '14px',
+                    background: '#f8fafc',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                    color: '#94a3b8',
+                    fontSize: 13,
+                  }}
+                >
+                  Chưa có tệp đính kèm nào
+                </div>
+              ) : (
+                <List
+                  size="small"
+                  dataSource={taskDetail.attachments}
+                  renderItem={(file) => {
+                    const isImage = file.mimeType?.startsWith('image/');
+                    const fullUrl = `http://localhost:3000${file.fileUrl}`;
+                    const canDeleteFile = currentUser?.id === file.uploadedBy.id || isOwnerOrAdmin;
+
+                    return (
+                      <List.Item
+                        key={file.id}
+                        style={{
+                          padding: '8px 12px',
+                          background: '#f8fafc',
+                          borderRadius: 8,
+                          marginBottom: 8,
+                          border: '1px solid #f1f5f9',
+                        }}
+                        actions={[
+                          ...(canDeleteFile
+                            ? [
+                                <Popconfirm
+                                  key="delete"
+                                  title="Xóa tệp đính kèm"
+                                  description="Bạn có chắc chắn muốn xóa tệp này?"
+                                  onConfirm={() => handleDeleteAttachment(file.id)}
+                                  okText="Xóa"
+                                  cancelText="Hủy"
+                                >
+                                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                                </Popconfirm>,
+                              ]
+                            : []),
+                        ]}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            isImage ? (
+                              <Image
+                                width={40}
+                                height={40}
+                                src={fullUrl}
+                                style={{ objectFit: 'cover', borderRadius: 6 }}
+                              />
+                            ) : (
+                              <Avatar
+                                shape="square"
+                                size={40}
+                                icon={isImage ? <FileImageOutlined /> : <FileOutlined />}
+                                style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}
+                              />
+                            )
+                          }
+                          title={
+                            <a href={fullUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 500 }}>
+                              {file.fileName}
+                            </a>
+                          }
+                          description={
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                              {formatFileSize(file.fileSize)} • {file.uploadedBy.fullName} •{' '}
+                              {new Date(file.createdAt).toLocaleString('vi-VN')}
+                            </Text>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                />
+              )}
+            </div>
+
+            <Divider style={{ margin: '4px 0' }} />
 
             <div>
               <Title level={5} style={{ marginBottom: 12 }}>
