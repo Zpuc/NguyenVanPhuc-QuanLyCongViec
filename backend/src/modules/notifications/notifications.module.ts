@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
+import { DeadlineReminderService } from './deadline-reminder.service';
 
 @Global()
 @Module({
@@ -17,7 +18,7 @@ import { NotificationsService } from './notifications.service';
     }),
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsService, NotificationsGateway],
-  exports: [NotificationsService, NotificationsGateway],
+  providers: [NotificationsService, NotificationsGateway, DeadlineReminderService],
+  exports: [NotificationsService, NotificationsGateway, DeadlineReminderService],
 })
 export class NotificationsModule {}

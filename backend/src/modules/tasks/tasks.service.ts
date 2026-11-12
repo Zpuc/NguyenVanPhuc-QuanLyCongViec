@@ -129,6 +129,14 @@ export class TasksService {
                     },
                     orderBy: { createdAt: 'desc' },
                 },
+                activityLogs: {
+                    include: {
+                        user: {
+                            select: { id: true, fullName: true, email: true, avatarUrl: true },
+                        },
+                    },
+                    orderBy: { createdAt: 'desc' },
+                },
             },
         });
 
@@ -169,14 +177,19 @@ export class TasksService {
         });
 
         if (oldColumnId !== dto.columnId) {
+            const [oldCol, newCol] = await Promise.all([
+                this.prisma.boardColumn.findUnique({ where: { id: oldColumnId }, select: { title: true } }),
+                this.prisma.boardColumn.findUnique({ where: { id: dto.columnId }, select: { title: true } }),
+            ]);
+
             await this.prisma.activityLog.create({
                 data: {
                     projectId: task.projectId,
                     taskId: task.id,
                     userId,
                     action: 'MOVED_COLUMN',
-                    oldValue: { columnId: oldColumnId },
-                    newValue: { columnId: dto.columnId },
+                    oldValue: { columnId: oldColumnId, columnTitle: oldCol?.title },
+                    newValue: { columnId: dto.columnId, columnTitle: newCol?.title },
                 },
             });
         }
@@ -228,6 +241,25 @@ export class TasksService {
                 content: `Bạn được giao công việc "${updated.title}" (${updated.project.key}-${updated.taskNumber})`,
                 type: 'TASK_ASSIGNED',
                 metadata: { projectId: task.projectId, taskId },
+            });
+        }
+
+        const changedFields: string[] = [];
+        if (dto.title !== undefined && dto.title !== task.title) changedFields.push('tiêu đề');
+        if (dto.description !== undefined && dto.description !== task.description) changedFields.push('mô tả');
+        if (dto.priority !== undefined && dto.priority !== task.priority) changedFields.push('độ ưu tiên');
+        if (dto.assigneeId !== undefined && dto.assigneeId !== task.assigneeId) changedFields.push('người thực hiện');
+        if (dto.dueDate !== undefined) changedFields.push('hạn chót');
+
+        if (changedFields.length > 0) {
+            await this.prisma.activityLog.create({
+                data: {
+                    projectId: task.projectId,
+                    taskId,
+                    userId,
+                    action: 'UPDATED_TASK',
+                    newValue: { fields: changedFields },
+                },
             });
         }
 

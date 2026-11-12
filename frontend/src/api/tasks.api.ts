@@ -48,6 +48,20 @@ export interface AttachmentItem {
   };
 }
 
+export interface ActivityLogItem {
+  id: string;
+  action: string;
+  oldValue?: Record<string, any> | null;
+  newValue?: Record<string, any> | null;
+  createdAt: string;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    avatarUrl?: string;
+  };
+}
+
 export interface TaskDetail {
   id: string;
   taskNumber: number;
@@ -73,6 +87,7 @@ export interface TaskDetail {
   };
   comments: CommentItem[];
   attachments: AttachmentItem[];
+  activityLogs?: ActivityLogItem[];
 }
 
 export const tasksApi = {

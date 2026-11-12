@@ -23,6 +23,9 @@ import {
   Tooltip,
   Upload,
   Image,
+  Tabs,
+  Timeline,
+  Empty,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -43,13 +46,14 @@ import {
   UploadOutlined,
   FileOutlined,
   FileImageOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { projectsApi } from '../../api/projects.api';
 import type { ProjectDetail, ColumnItem, TaskItem } from '../../api/projects.api';
 import { tasksApi } from '../../api/tasks.api';
-import type { TaskDetail, UpdateTaskDto } from '../../api/tasks.api';
+import type { TaskDetail, UpdateTaskDto, ActivityLogItem } from '../../api/tasks.api';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
@@ -268,13 +272,11 @@ export const KanbanBoardPage: React.FC = () => {
     if (!taskDetail || !commentText.trim()) return;
     try {
       setCommentSubmitting(true);
-      const newComment = await tasksApi.addComment(taskDetail.id, commentText.trim());
-      setTaskDetail({
-        ...taskDetail,
-        comments: [newComment, ...taskDetail.comments],
-      });
+      await tasksApi.addComment(taskDetail.id, commentText.trim());
       setCommentText('');
       message.success('Đã gửi bình luận');
+      const refreshed = await tasksApi.getTaskDetail(taskDetail.id);
+      setTaskDetail(refreshed);
       fetchProjectDetail();
     } catch (err: any) {
       message.error(err.message || 'Không thể gửi bình luận');
@@ -302,16 +304,10 @@ export const KanbanBoardPage: React.FC = () => {
     if (!taskDetail) return;
     try {
       setSavingTask(true);
-      const updated = await tasksApi.updateTask(taskDetail.id, payload);
-      setTaskDetail({
-        ...taskDetail,
-        title: updated.title,
-        description: updated.description,
-        priority: updated.priority,
-        dueDate: updated.dueDate,
-        assignee: updated.assignee,
-      });
+      await tasksApi.updateTask(taskDetail.id, payload);
       message.success(successMessage);
+      const refreshed = await tasksApi.getTaskDetail(taskDetail.id);
+      setTaskDetail(refreshed);
       fetchProjectDetail();
     } catch (err: any) {
       message.error(err.message || 'Cập nhật công việc thất bại');
@@ -329,12 +325,10 @@ export const KanbanBoardPage: React.FC = () => {
     if (!taskDetail) return;
     try {
       setUploadingFile(true);
-      const attachment = await tasksApi.uploadAttachment(taskDetail.id, file);
-      setTaskDetail({
-        ...taskDetail,
-        attachments: [attachment, ...(taskDetail.attachments || [])],
-      });
+      await tasksApi.uploadAttachment(taskDetail.id, file);
       message.success('Tải lên tệp đính kèm thành công');
+      const refreshed = await tasksApi.getTaskDetail(taskDetail.id);
+      setTaskDetail(refreshed);
       fetchProjectDetail();
     } catch (err: any) {
       message.error(err.message || 'Tải lên tệp thất bại');
@@ -362,6 +356,34 @@ export const KanbanBoardPage: React.FC = () => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatActivityText = (log: ActivityLogItem) => {
+    switch (log.action) {
+      case 'CREATED_TASK':
+        return 'đã tạo công việc này';
+      case 'MOVED_COLUMN': {
+        const oldTitle =
+          log.oldValue?.columnTitle ||
+          project?.columns.find((c) => c.id === log.oldValue?.columnId)?.title ||
+          'cột cũ';
+        const newTitle =
+          log.newValue?.columnTitle ||
+          project?.columns.find((c) => c.id === log.newValue?.columnId)?.title ||
+          'cột mới';
+        return `đã chuyển trạng thái từ "${oldTitle}" sang "${newTitle}"`;
+      }
+      case 'ATTACHED_FILE':
+        return `đã đính kèm tệp "${log.newValue?.fileName || 'tài liệu'}"`;
+      case 'COMMENTED':
+        return 'đã thêm một bình luận';
+      case 'UPDATED_TASK': {
+        const fields = Array.isArray(log.newValue?.fields) ? log.newValue.fields.join(', ') : 'thông tin';
+        return `đã cập nhật ${fields}`;
+      }
+      default:
+        return log.action;
+    }
   };
 
   const handleInviteMember = async () => {
@@ -1244,103 +1266,148 @@ export const KanbanBoardPage: React.FC = () => {
 
             <Divider style={{ margin: '4px 0' }} />
 
-            <div>
-              <Title level={5} style={{ marginBottom: 12 }}>
-                Bình luận ({taskDetail.comments.length})
-              </Title>
-
-              <div style={{ marginBottom: 16 }}>
-                <Input.TextArea
-                  rows={3}
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Viết phản hồi hoặc trao đổi công việc..."
-                />
-                <div style={{ textAlign: 'right', marginTop: 8 }}>
-                  <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    loading={commentSubmitting}
-                    disabled={!commentText.trim()}
-                    onClick={handleAddComment}
-                  >
-                    Gửi bình luận
-                  </Button>
-                </div>
-              </div>
-
-              <List
-                dataSource={taskDetail.comments}
-                locale={{ emptyText: 'Chưa có bình luận nào' }}
-                renderItem={(item) => (
-                  <List.Item
-                    key={item.id}
-                    style={{
-                      padding: '12px 0',
-                      borderBottom: '1px solid #f1f5f9',
-                      alignItems: 'flex-start',
-                    }}
-                  >
-                    <List.Item.Meta
-                      avatar={
-                        <Avatar
-                          icon={<UserOutlined />}
-                          src={item.user.avatarUrl}
-                          style={{ backgroundColor: '#4f46e5' }}
+            <Tabs
+              defaultActiveKey="comments"
+              items={[
+                {
+                  key: 'comments',
+                  label: (
+                    <Space size={6}>
+                      <CommentOutlined />
+                      <span>Bình luận ({taskDetail.comments.length})</span>
+                    </Space>
+                  ),
+                  children: (
+                    <div>
+                      <div style={{ marginBottom: 16 }}>
+                        <Input.TextArea
+                          rows={3}
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          placeholder="Viết phản hồi hoặc trao đổi công việc..."
                         />
-                      }
-                      title={
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Space size={8}>
-                            <Text strong style={{ fontSize: 13 }}>
-                              {item.user.fullName}
-                            </Text>
-                            <Text type="secondary" style={{ fontSize: 11 }}>
-                              {new Date(item.createdAt).toLocaleString('vi-VN')}
-                            </Text>
-                          </Space>
+                        <div style={{ textAlign: 'right', marginTop: 8 }}>
+                          <Button
+                            type="primary"
+                            icon={<SendOutlined />}
+                            loading={commentSubmitting}
+                            disabled={!commentText.trim()}
+                            onClick={handleAddComment}
+                          >
+                            Gửi bình luận
+                          </Button>
+                        </div>
+                      </div>
 
-                          {currentUser?.id === item.user.id && (
-                            <Popconfirm
-                              title="Xóa bình luận"
-                              description="Bạn có chắc chắn muốn xóa bình luận này?"
-                              onConfirm={() => handleDeleteComment(item.id)}
-                              okText="Xóa"
-                              cancelText="Hủy"
-                            >
-                              <Button
-                                type="text"
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                              />
-                            </Popconfirm>
-                          )}
-                        </div>
-                      }
-                      description={
-                        <div
-                          style={{
-                            marginTop: 4,
-                            color: '#334155',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {item.content}
-                        </div>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
-            </div>
+                      <List
+                        dataSource={taskDetail.comments}
+                        locale={{ emptyText: 'Chưa có bình luận nào' }}
+                        renderItem={(item) => (
+                          <List.Item
+                            key={item.id}
+                            style={{
+                              padding: '12px 0',
+                              borderBottom: '1px solid #f1f5f9',
+                              alignItems: 'flex-start',
+                            }}
+                          >
+                            <List.Item.Meta
+                              avatar={
+                                <Avatar
+                                  icon={<UserOutlined />}
+                                  src={item.user.avatarUrl}
+                                  style={{ backgroundColor: '#4f46e5' }}
+                                />
+                              }
+                              title={
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Space size={8}>
+                                    <Text strong style={{ fontSize: 13 }}>
+                                      {item.user.fullName}
+                                    </Text>
+                                    <Text type="secondary" style={{ fontSize: 11 }}>
+                                      {new Date(item.createdAt).toLocaleString('vi-VN')}
+                                    </Text>
+                                  </Space>
+
+                                  {currentUser?.id === item.user.id && (
+                                    <Popconfirm
+                                      title="Xóa bình luận"
+                                      description="Bạn có chắc chắn muốn xóa bình luận này?"
+                                      onConfirm={() => handleDeleteComment(item.id)}
+                                      okText="Xóa"
+                                      cancelText="Hủy"
+                                    >
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        danger
+                                        icon={<DeleteOutlined />}
+                                      />
+                                    </Popconfirm>
+                                  )}
+                                </div>
+                              }
+                              description={
+                                <div
+                                  style={{
+                                    marginTop: 4,
+                                    color: '#334155',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                  }}
+                                >
+                                  {item.content}
+                                </div>
+                              }
+                            />
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  key: 'activity',
+                  label: (
+                    <Space size={6}>
+                      <HistoryOutlined />
+                      <span>Lịch sử hoạt động ({taskDetail.activityLogs?.length || 0})</span>
+                    </Space>
+                  ),
+                  children:
+                    !taskDetail.activityLogs || taskDetail.activityLogs.length === 0 ? (
+                      <Empty description="Chưa có lịch sử hoạt động" style={{ padding: '24px 0' }} />
+                    ) : (
+                      <Timeline
+                        style={{ marginTop: 8 }}
+                        items={taskDetail.activityLogs.map((log) => ({
+                          key: log.id,
+                          children: (
+                            <div>
+                              <Text strong style={{ fontSize: 13 }}>
+                                {log.user.fullName}
+                              </Text>{' '}
+                              <Text style={{ fontSize: 13 }}>{formatActivityText(log)}</Text>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>
+                                  {new Date(log.createdAt).toLocaleString('vi-VN')}
+                                </Text>
+                              </div>
+                            </div>
+                          ),
+                        }))}
+                      />
+                    ),
+                },
+              ]}
+            />
           </div>
         ) : null}
       </Drawer>
