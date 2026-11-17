@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskmaster_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: vanphuc04
+      POSTGRES_DB: task_management_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d task_management_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskmaster_backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:vanphuc04@postgres:5432/task_management_db?schema=public
+      PORT: 3000
+      JWT_SECRET: zpuc
+      JWT_EXPIRES_IN: 7d
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskmaster_frontend
+    restart: always
+    ports:
+      - "5173:80"
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  uploads_data:
