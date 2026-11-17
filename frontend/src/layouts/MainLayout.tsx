@@ -24,6 +24,7 @@ const { Text } = Typography;
 
 export const MainLayout: React.FC = () => {
     const [collapsed, setCollapsed] = useState(false);
+    const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [unreadCount, setUnreadCount] = useState<number>(0);
     const [loadingNotifications, setLoadingNotifications] = useState<boolean>(false);
@@ -35,6 +36,17 @@ export const MainLayout: React.FC = () => {
     const {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 768;
+            setIsMobile(mobile);
+            if (mobile) setCollapsed(true);
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const fetchUnreadCount = async () => {
         try {
@@ -179,7 +191,7 @@ export const MainLayout: React.FC = () => {
     ];
 
     const notificationContent = (
-        <div style={{ width: 360, maxHeight: 420, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: isMobile ? 'min(330px, 92vw)' : 360, maxHeight: 420, display: 'flex', flexDirection: 'column' }}>
             <div
                 style={{
                     display: 'flex',
@@ -252,14 +264,35 @@ export const MainLayout: React.FC = () => {
     );
 
     return (
-        <Layout style={{ minHeight: '100vh' }}>
+        <Layout style={{ minHeight: '100vh', position: 'relative' }}>
+            {isMobile && !collapsed && (
+                <div
+                    onClick={() => setCollapsed(true)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0, 0, 0, 0.45)',
+                        zIndex: 999,
+                    }}
+                />
+            )}
+
             <Sider
                 trigger={null}
                 collapsible
                 collapsed={collapsed}
+                collapsedWidth={isMobile ? 0 : 80}
                 theme="light"
                 style={{
                     borderRight: '1px solid #e2e8f0',
+                    position: isMobile && !collapsed ? 'fixed' : 'relative',
+                    zIndex: isMobile && !collapsed ? 1000 : 'auto',
+                    height: isMobile && !collapsed ? '100vh' : 'auto',
+                    top: 0,
+                    left: 0,
                 }}
             >
                 <div
@@ -291,7 +324,7 @@ export const MainLayout: React.FC = () => {
             <Layout style={{ minWidth: 0 }}>
                 <Header
                     style={{
-                        padding: '0 24px',
+                        padding: isMobile ? '0 12px' : '0 24px',
                         background: colorBgContainer,
                         display: 'flex',
                         alignItems: 'center',
@@ -306,7 +339,7 @@ export const MainLayout: React.FC = () => {
                         style={{ fontSize: 16, width: 44, height: 44 }}
                     />
 
-                    <Space size={20}>
+                    <Space size={isMobile ? 10 : 20}>
                         <Popover
                             content={notificationContent}
                             trigger="click"
@@ -331,7 +364,7 @@ export const MainLayout: React.FC = () => {
                                     icon={<UserOutlined />}
                                     src={user?.avatarUrl}
                                 />
-                                <Text strong>{user?.fullName || 'Người dùng'}</Text>
+                                {!isMobile && <Text strong>{user?.fullName || 'Người dùng'}</Text>}
                             </Space>
                         </Dropdown>
                     </Space>
@@ -339,8 +372,8 @@ export const MainLayout: React.FC = () => {
 
                 <Content
                     style={{
-                        margin: 24,
-                        padding: 24,
+                        margin: isMobile ? 10 : 24,
+                        padding: isMobile ? 12 : 24,
                         background: colorBgContainer,
                         borderRadius: borderRadiusLG,
                         minHeight: 280,
