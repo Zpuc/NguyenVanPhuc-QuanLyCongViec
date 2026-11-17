@@ -94,6 +94,7 @@ export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
+  const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -142,6 +143,12 @@ export const KanbanBoardPage: React.FC = () => {
   useEffect(() => {
     fetchProjectDetail();
   }, [id]);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleOpenCreateTask = (columnId: string) => {
     form.setFieldsValue({ columnId, priority: 'MEDIUM', assigneeId: currentUser?.id });
@@ -542,13 +549,22 @@ export const KanbanBoardPage: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <Space size={16}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: isMobile ? 12 : 20,
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
+        <Space size={isMobile ? 8 : 16} wrap align="center">
           <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
             Quay lại
           </Button>
           <Space align="center">
-            <Title level={3} style={{ margin: 0 }}>
+            <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
               {project.name}
             </Title>
             <Tag color="purple" style={{ fontWeight: 'bold' }}>
@@ -557,8 +573,8 @@ export const KanbanBoardPage: React.FC = () => {
           </Space>
         </Space>
 
-        <Space size={12}>
-          <Avatar.Group max={{ count: 4, style: { color: '#f56a00', backgroundColor: '#fde3cf' } }}>
+        <Space size={isMobile ? 8 : 12} wrap align="center">
+          <Avatar.Group max={{ count: isMobile ? 2 : 4, style: { color: '#f56a00', backgroundColor: '#fde3cf' } }}>
             {project.members.map((m) => (
               <Tooltip key={m.id} title={`${m.user.fullName} (${roleLabels[m.role]?.label || m.role})`}>
                 <Avatar
@@ -603,19 +619,19 @@ export const KanbanBoardPage: React.FC = () => {
           border: '1px solid #e2e8f0',
         }}
       >
-        <Space size={12} wrap align="center">
+        <Space size={12} wrap align="center" style={{ width: '100%' }}>
           <Input.Search
             placeholder="Tìm theo tên việc hoặc mã..."
             allowClear
             value={filterSearch}
             onChange={(e) => setFilterSearch(e.target.value)}
-            style={{ width: 240 }}
+            style={{ width: isMobile ? '100%' : 240 }}
           />
 
           <Select
             value={filterPriority}
             onChange={(val) => setFilterPriority(val)}
-            style={{ width: 170 }}
+            style={{ width: isMobile ? '100%' : 170 }}
             options={[
               { value: 'ALL', label: 'Tất cả mức ưu tiên' },
               { value: 'URGENT', label: 'Khẩn cấp (Urgent)' },
@@ -629,6 +645,7 @@ export const KanbanBoardPage: React.FC = () => {
             type={filterOnlyMyTasks ? 'primary' : 'default'}
             icon={<UserOutlined />}
             onClick={() => setFilterOnlyMyTasks(!filterOnlyMyTasks)}
+            style={isMobile ? { width: '100%' } : undefined}
           >
             Chỉ việc của tôi
           </Button>
@@ -964,7 +981,7 @@ export const KanbanBoardPage: React.FC = () => {
           )
         }
         placement="right"
-        width={560}
+        width={isMobile ? '100%' : 560}
         open={!!selectedTaskId}
         onClose={handleCloseDrawer}
         destroyOnHidden
@@ -1420,7 +1437,7 @@ export const KanbanBoardPage: React.FC = () => {
           </Space>
         }
         placement="right"
-        width={460}
+        width={isMobile ? '100%' : 460}
         open={isMembersDrawerOpen}
         onClose={() => setIsMembersDrawerOpen(false)}
         destroyOnHidden
