@@ -14,8 +14,8 @@ export interface UpdateTaskDto {
   title?: string;
   description?: string;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-  assigneeId?: string;
-  dueDate?: string;
+  assigneeId?: string | null;
+  dueDate?: string | null;
 }
 
 export interface MoveTaskDto {
@@ -26,6 +26,33 @@ export interface MoveTaskDto {
 export interface CommentItem {
   id: string;
   content: string;
+  createdAt: string;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    avatarUrl?: string;
+  };
+}
+
+export interface AttachmentItem {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+  uploadedBy: {
+    id: string;
+    fullName: string;
+  };
+}
+
+export interface ActivityLogItem {
+  id: string;
+  action: string;
+  oldValue?: Record<string, any> | null;
+  newValue?: Record<string, any> | null;
   createdAt: string;
   user: {
     id: string;
@@ -59,6 +86,8 @@ export interface TaskDetail {
     fullName: string;
   };
   comments: CommentItem[];
+  attachments: AttachmentItem[];
+  activityLogs?: ActivityLogItem[];
 }
 
 export const tasksApi = {
@@ -66,7 +95,7 @@ export const tasksApi = {
     return axiosClient.post('/tasks', data);
   },
 
-  updateTask: (taskId: string, data: UpdateTaskDto) => {
+  updateTask: (taskId: string, data: UpdateTaskDto): Promise<TaskDetail> => {
     return axiosClient.patch(`/tasks/${taskId}`, data);
   },
 
@@ -88,5 +117,19 @@ export const tasksApi = {
 
   deleteComment: (commentId: string) => {
     return axiosClient.delete(`/comments/${commentId}`);
+  },
+
+  uploadAttachment: (taskId: string, file: File): Promise<AttachmentItem> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axiosClient.post(`/tasks/${taskId}/attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  deleteAttachment: (attachmentId: string) => {
+    return axiosClient.delete(`/tasks/attachments/${attachmentId}`);
   },
 };

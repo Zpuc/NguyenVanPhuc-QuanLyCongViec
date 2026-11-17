@@ -9,6 +9,9 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ProjectRole } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
+import { CreateColumnDto } from './dto/create-column.dto';
+import { UpdateColumnDto } from './dto/update-column.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -248,6 +251,137 @@ export class ProjectsService {
         ]);
 
         return { message: 'Đã xóa thành viên khỏi dự án thành công' };
+    }
+
+    async update(projectId: string, userId: string, dto: UpdateProjectDto) {
+        await this.verifyProjectAdmin(
+            projectId,
+            userId,
+            'Chỉ Chủ dự án (OWNER) hoặc Quản trị viên (ADMIN) mới có quyền sửa thông tin dự án',
+        );
+
+        return this.prisma.project.update({
+            where: { id: projectId },
+            data: {
+                name: dto.name,
+                description: dto.description,
+            },
+        });
+    }
+
+    async createColumn(projectId: string, userId: string, dto: CreateColumnDto) {
+        await this.verifyProjectAdmin(
+            projectId,
+            userId,
+            'Chỉ Chủ dự án (OWNER) hoặc Quản trị viên (ADMIN) mới có quyền thêm cột trạng thái',
+        );
+
+        const maxOrder = await this.prisma.boardColumn.aggregate({
+            where: { projectId },
+            _max: { positionOrder: true },
+        });
+
+        const nextOrder = (maxOrder._max.positionOrder ?? 0) + 1000;
+
+        return this.prisma.boardColumn.create({
+            data: {
+                projectId,
+                title: dto.title.trim(),
+                color: dto.color || '#64748b',
+                positionOrder: nextOrder,
+            },
+            include: {
+                tasks: true,
+            },
+        });
+    }
+
+    async updateColumn(
+        projectId: string,
+        columnId: string,
+        userId: string,
+        dto: UpdateColumnDto,
+    ) {
+        await this.verifyProjectAdmin(
+            projectId,
+            userId,
+            'Chỉ Chủ dự án (OWNER) hoặc Quản trị viên (ADMIN) mới có quyền chỉnh sửa cột trạng thái',
+        );
+
+        const column = await this.prisma.boardColumn.findFirst({
+            where: { id: columnId, projectId },
+        });
+
+        if (!column) {
+            throw new NotFoundException('Không tìm thấy cột trạng thái trong dự án');
+        }
+
+        const data: { title?: string; color?: string; positionOrder?: number } = {};
+        if (dto.title !== undefined) {
+            data.title = dto.title.trim();
+        }
+        if (dto.color !== undefined) {
+            data.color = dto.color;
+        }
+        if (dto.positionOrder !== undefined) {
+            data.positionOrder = dto.positionOrder;
+        }
+
+        return this.prisma.boardColumn.update({
+            where: { id: columnId },
+            data,
+        });
+    }
+
+    async deleteColumn(projectId: string, columnId: string, userId: string) {
+        await this.verifyProjectAdmin(
+            projectId,
+            userId,
+            'Chỉ Chủ dự án (OWNER) hoặc Quản trị viên (ADMIN) mới có quyền xóa cột trạng thái',
+        );
+
+        const column = await this.prisma.boardColumn.findFirst({
+            where: { id: columnId, projectId },
+            include: {
+                _count: {
+                    select: { tasks: true },
+                },
+            },
+        });
+
+        if (!column) {
+            throw new NotFoundException('Không tìm thấy cột trạng thái trong dự án');
+        }
+
+        const totalColumns = await this.prisma.boardColumn.count({
+            where: { projectId },
+        });
+
+        if (totalColumns <= 1) {
+            throw new BadRequestException('Dự án phải có ít nhất 1 cột trạng thái');
+        }
+
+        if (column._count.tasks > 0) {
+            throw new BadRequestException(
+                'Vui lòng di chuyển hoặc xóa hết công việc trong cột trước khi xóa cột',
+            );
+        }
+
+        await this.prisma.boardColumn.delete({
+            where: { id: columnId },
+        });
+
+        return { message: 'Đã xóa cột trạng thái thành công' };
+    }
+
+    private async verifyProjectAdmin(projectId: string, userId: string, errorMessage: string) {
+        const member = await this.verifyProjectMember(projectId, userId);
+
+        if (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.ADMIN) {
+            throw new ForbiddenException(errorMessage);
+        }
+
+        return member;
     }
 
     async remove(projectId: string, userId: string) {

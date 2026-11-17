@@ -1,6 +1,8 @@
 import {
+    BadRequestException,
     ConflictException,
     Injectable,
+    NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -8,6 +10,8 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -89,6 +93,48 @@ export class AuthService {
         };
     }
 
+
+    async updateProfile(userId: string, dto: UpdateProfileDto) {
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: { fullName: dto.fullName.trim() },
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                avatarUrl: true,
+                systemRole: true,
+                createdAt: true,
+            },
+        });
+    }
+
+    async changePassword(userId: string, dto: ChangePasswordDto) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Không tìm thấy tài khoản');
+        }
+
+        const isPasswordMatching = await bcrypt.compare(
+            dto.currentPassword,
+            user.passwordHash,
+        );
+
+        if (!isPasswordMatching) {
+            throw new BadRequestException('Mật khẩu hiện tại không chính xác');
+        }
+
+        const newPasswordHash = await bcrypt.hash(dto.newPassword, 10);
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { passwordHash: newPasswordHash },
+        });
+
+        return { message: 'Đổi mật khẩu thành công' };
+    }
 
     private async signToken(userId: string, email: string, systemRole: string) {
         const payload = { sub: userId, email, systemRole };
