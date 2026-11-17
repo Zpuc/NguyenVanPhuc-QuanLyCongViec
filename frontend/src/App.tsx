@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ProjectsPage } from './pages/projects/ProjectsPage';
 import { TeamProjectsPage } from './pages/projects/TeamProjectsPage';
 import { KanbanBoardPage } from './pages/board/KanbanBoardPage';
+import { ProfilePage } from './pages/profile/ProfilePage';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/team-projects" element={<TeamProjectsPage />} />
           <Route path="/projects/:id" element={<KanbanBoardPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
