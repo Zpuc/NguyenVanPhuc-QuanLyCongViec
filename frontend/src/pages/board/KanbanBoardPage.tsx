@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import {
@@ -26,8 +26,10 @@ import {
   Tabs,
   Timeline,
   Empty,
+  Table,
+  Segmented,
 } from 'antd';
-import type { MenuProps } from 'antd';
+import type { MenuProps, TableColumnsType } from 'antd';
 import {
   ArrowLeftOutlined,
   PlusOutlined,
@@ -47,6 +49,9 @@ import {
   FileOutlined,
   FileImageOutlined,
   HistoryOutlined,
+  AppstoreOutlined,
+  TableOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
@@ -91,11 +96,18 @@ const columnColors = [
   '#06b6d4',
 ];
 
+interface TableTaskRow extends TaskItem {
+  columnId: string;
+  columnTitle: string;
+  columnColor?: string;
+}
+
 export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -582,6 +594,193 @@ export const KanbanBoardPage: React.FC = () => {
     });
   };
 
+  const allProjectTasks = useMemo(() => {
+    if (!project) return [];
+    const rows: TableTaskRow[] = [];
+    project.columns.forEach((col) => {
+      col.tasks.forEach((t) => {
+        rows.push({
+          ...t,
+          columnId: col.id,
+          columnTitle: col.title,
+          columnColor: col.color,
+        });
+      });
+    });
+    return rows;
+  }, [project]);
+
+  const filteredTableTasks = useMemo(() => {
+    return getFilteredTasks(allProjectTasks as any) as TableTaskRow[];
+  }, [allProjectTasks, filterSearch, filterPriority, filterOnlyMyTasks]);
+
+  const tableColumns: TableColumnsType<TableTaskRow> = useMemo(() => {
+    if (!project) return [];
+    return [
+      {
+        title: 'Mã & Tên công việc',
+        dataIndex: 'title',
+        key: 'title',
+        sorter: (a, b) => a.taskNumber - b.taskNumber,
+        render: (title: string, record: TableTaskRow) => {
+          const code = `${project.key}-${record.taskNumber}`;
+          return (
+            <Space direction="vertical" size={2}>
+              <Space size={8} wrap>
+                <Tag color="purple" style={{ fontWeight: 600, margin: 0 }}>
+                  {code}
+                </Tag>
+                <Text strong style={{ fontSize: 14, color: '#0f172a' }}>
+                  {title}
+                </Text>
+              </Space>
+              {record.description && (
+                <Text
+                  type="secondary"
+                  ellipsis={{ tooltip: record.description }}
+                  style={{ margin: 0, fontSize: 12, maxWidth: 360, display: 'block' }}
+                >
+                  {record.description}
+                </Text>
+              )}
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'Trạng thái',
+        dataIndex: 'columnTitle',
+        key: 'columnTitle',
+        filters: project.columns.map((c) => ({ text: c.title, value: c.id })),
+        onFilter: (value, record) => record.columnId === value,
+        render: (_, record: TableTaskRow) => (
+          <Tag
+            style={{
+              fontWeight: 600,
+              borderRadius: 4,
+              background: '#f8fafc',
+              borderColor: record.columnColor || '#cbd5e1',
+              color: record.columnColor || '#475569',
+            }}
+          >
+            {record.columnTitle}
+          </Tag>
+        ),
+      },
+      {
+        title: 'Mức ưu tiên',
+        dataIndex: 'priority',
+        key: 'priority',
+        filters: [
+          { text: 'Khẩn cấp', value: 'URGENT' },
+          { text: 'Cao', value: 'HIGH' },
+          { text: 'Trung bình', value: 'MEDIUM' },
+          { text: 'Thấp', value: 'LOW' },
+        ],
+        onFilter: (value, record) => record.priority === value,
+        sorter: (a, b) => {
+          const weight: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+          return (weight[a.priority] || 0) - (weight[b.priority] || 0);
+        },
+        render: (priority: string) => {
+          const label = priorityLabels[priority] || priority;
+          const color = priorityColors[priority] || 'default';
+          return <Tag color={color}>{label}</Tag>;
+        },
+      },
+      {
+        title: 'Người thực hiện',
+        dataIndex: 'assignee',
+        key: 'assignee',
+        filters: [
+          { text: 'Chưa phân công', value: 'UNASSIGNED' },
+          ...project.members.map((m) => ({ text: m.user.fullName, value: m.user.id })),
+        ],
+        onFilter: (value, record) => {
+          if (value === 'UNASSIGNED') return !record.assignee;
+          return record.assignee?.id === value;
+        },
+        render: (_, record: TableTaskRow) => {
+          if (!record.assignee) {
+            return <Tag style={{ color: '#94a3b8' }}>Chưa phân công</Tag>;
+          }
+          return (
+            <Space size={8}>
+              <Avatar
+                size={24}
+                icon={<UserOutlined />}
+                src={formatAvatarUrl(record.assignee.avatarUrl)}
+                style={{ backgroundColor: '#4f46e5' }}
+              />
+              <span style={{ fontSize: 13 }}>{record.assignee.fullName}</span>
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'Hạn chót',
+        dataIndex: 'dueDate',
+        key: 'dueDate',
+        sorter: (a, b) => {
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        },
+        render: (dueDate: string | undefined, record: TableTaskRow) => {
+          if (!dueDate) {
+            return <Text type="secondary" style={{ fontSize: 12 }}>Chưa đặt</Text>;
+          }
+          const due = new Date(dueDate);
+          const lower = record.columnTitle.toLowerCase();
+          const isDone = lower.includes('done') || lower.includes('hoàn thành') || lower.includes('xong');
+          const isOverdue = !isDone && due.getTime() < Date.now();
+          return (
+            <Space size={4} style={{ color: isOverdue ? '#ef4444' : '#64748b', fontWeight: isOverdue ? 600 : 400 }}>
+              <CalendarOutlined />
+              <span style={{ fontSize: 13 }}>{due.toLocaleDateString('vi-VN')}</span>
+              {isOverdue && <Tag color="red" style={{ fontSize: 10, margin: 0 }}>Quá hạn</Tag>}
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'Tương tác',
+        key: 'interactions',
+        width: 100,
+        render: (_, record: TableTaskRow) => (
+          <Space size={12} style={{ color: '#64748b', fontSize: 12 }}>
+            <Space size={4}>
+              <CommentOutlined />
+              <span>{record._count?.comments || 0}</span>
+            </Space>
+            <Space size={4}>
+              <PaperClipOutlined />
+              <span>{record._count?.attachments || 0}</span>
+            </Space>
+          </Space>
+        ),
+      },
+      {
+        title: '',
+        key: 'actions',
+        width: 90,
+        render: (_, record: TableTaskRow) => (
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenTaskDetail(record.id);
+            }}
+          >
+            Chi tiết
+          </Button>
+        ),
+      },
+    ];
+  }, [project]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div
@@ -700,14 +899,26 @@ export const KanbanBoardPage: React.FC = () => {
           )}
         </Space>
 
-        {isFiltered && (
-          <Tag color="blue" icon={<FilterOutlined />}>
-            Đang lọc kết quả
-          </Tag>
-        )}
+        <Space size={12} wrap align="center" style={isMobile ? { width: '100%', justifyContent: 'space-between' } : undefined}>
+          {isFiltered && (
+            <Tag color="blue" icon={<FilterOutlined />}>
+              Đang lọc kết quả
+            </Tag>
+          )}
+
+          <Segmented
+            value={viewMode}
+            onChange={(val) => setViewMode(val as 'kanban' | 'table')}
+            options={[
+              { label: 'Bảng Kanban', value: 'kanban', icon: <AppstoreOutlined /> },
+              { label: 'Dạng bảng', value: 'table', icon: <TableOutlined /> },
+            ]}
+          />
+        </Space>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
+      {viewMode === 'kanban' ? (
+        <DragDropContext onDragEnd={handleDragEnd}>
         <div
           style={{
             display: 'flex',
@@ -928,6 +1139,38 @@ export const KanbanBoardPage: React.FC = () => {
           })}
         </div>
       </DragDropContext>
+      ) : (
+        <Card
+          bordered={false}
+          style={{ borderRadius: 10, background: '#ffffff', overflow: 'hidden' }}
+          styles={{ body: { padding: 0 } }}
+        >
+          <Table<TableTaskRow>
+            rowKey="id"
+            columns={tableColumns}
+            dataSource={filteredTableTasks}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: ['10', '20', '50'],
+              showTotal: (total) => `Tổng cộng ${total} công việc`,
+            }}
+            onRow={(record) => ({
+              onClick: () => handleOpenTaskDetail(record.id),
+              style: { cursor: 'pointer' },
+            })}
+            scroll={{ x: 850 }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={isFiltered ? 'Không có công việc nào khớp với bộ lọc' : 'Dự án chưa có công việc nào'}
+                  style={{ padding: '32px 0' }}
+                />
+              ),
+            }}
+          />
+        </Card>
+      )}
 
       <Modal
         title="Thêm công việc mới"
