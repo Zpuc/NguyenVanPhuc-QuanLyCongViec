@@ -90,7 +90,40 @@ export interface TaskDetail {
   activityLogs?: ActivityLogItem[];
 }
 
+export interface MyTaskItem {
+  id: string;
+  projectId: string;
+  columnId: string;
+  taskNumber: number;
+  title: string;
+  description?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  positionOrder: number;
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  project: {
+    id: string;
+    name: string;
+    key: string;
+  };
+  column: {
+    id: string;
+    title: string;
+    color?: string;
+    positionOrder?: number;
+  };
+  _count: {
+    comments: number;
+    attachments: number;
+  };
+}
+
 export const tasksApi = {
+  getMyTasks: (): Promise<MyTaskItem[]> => {
+    return axiosClient.get('/tasks/my-tasks');
+  },
+
   createTask: (data: CreateTaskDto) => {
     return axiosClient.post('/tasks', data);
   },

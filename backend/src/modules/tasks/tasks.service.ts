@@ -103,6 +103,41 @@ export class TasksService {
         return result;
     }
 
+    async getMyTasks(userId: string) {
+        return this.prisma.task.findMany({
+            where: {
+                assigneeId: userId,
+            },
+            include: {
+                project: {
+                    select: {
+                        id: true,
+                        name: true,
+                        key: true,
+                    },
+                },
+                column: {
+                    select: {
+                        id: true,
+                        title: true,
+                        color: true,
+                        positionOrder: true,
+                    },
+                },
+                _count: {
+                    select: {
+                        comments: true,
+                        attachments: true,
+                    },
+                },
+            },
+            orderBy: [
+                { dueDate: 'asc' },
+                { createdAt: 'desc' },
+            ],
+        });
+    }
+
     async findOne(taskId: string, userId: string) {
         const task = await this.prisma.task.findUnique({
             where: { id: taskId },

@@ -13,6 +13,7 @@ import {
   MenuUnfoldOutlined,
   CheckCircleFilled,
   BellOutlined,
+  CheckSquareOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../store/useAuthStore';
@@ -157,6 +158,12 @@ export const MainLayout: React.FC = () => {
             icon: <AppstoreOutlined />,
             label: 'Tổng quan',
             onClick: () => navigate('/dashboard'),
+        },
+        {
+            key: '/my-tasks',
+            icon: <CheckSquareOutlined />,
+            label: 'Việc của tôi',
+            onClick: () => navigate('/my-tasks'),
         },
         {
             key: '/projects',

@@ -36,6 +36,12 @@ export class TasksController {
         return this.tasksService.create(req.user.id, dto);
     }
 
+    @Get('my-tasks')
+    @ApiOperation({ summary: 'Lấy danh sách tất cả công việc được giao cho người dùng hiện tại' })
+    getMyTasks(@Req() req: any) {
+        return this.tasksService.getMyTasks(req.user.id);
+    }
+
     @Get(':id')
     @ApiOperation({ summary: 'Xem chi tiết công việc (Kèm bình luận, tệp đính kèm)' })
     findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
