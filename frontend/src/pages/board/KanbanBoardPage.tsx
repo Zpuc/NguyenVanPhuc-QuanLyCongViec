@@ -535,25 +535,13 @@ export const KanbanBoardPage: React.FC = () => {
     });
   };
 
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '100px 0' }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  if (!project) {
-    return null;
-  }
-
-  const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
+  const currentMember = project?.members.find((m) => m.user.id === currentUser?.id);
   const isOwner = currentMember?.role === 'OWNER';
   const isOwnerOrAdmin = isOwner || currentMember?.role === 'ADMIN';
   const canEditTask = currentMember?.role !== 'VIEWER';
 
-  const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
-  const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
+  const ownerMembers = project?.members.filter((m) => m.role === 'OWNER') || [];
+  const invitedMembers = project?.members.filter((m) => m.role !== 'OWNER') || [];
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -584,7 +572,7 @@ export const KanbanBoardPage: React.FC = () => {
       if (filterSearch.trim()) {
         const q = filterSearch.trim().toLowerCase();
         const matchesTitle = task.title.toLowerCase().includes(q);
-        const matchesKey = `${project.key}-${task.taskNumber}`.toLowerCase().includes(q);
+        const matchesKey = project ? `${project.key}-${task.taskNumber}`.toLowerCase().includes(q) : false;
         const matchesAssignee = task.assignee?.fullName.toLowerCase().includes(q);
         if (!matchesTitle && !matchesKey && !matchesAssignee) {
           return false;
@@ -780,6 +768,18 @@ export const KanbanBoardPage: React.FC = () => {
       },
     ];
   }, [project]);
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '100px 0' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return null;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1141,7 +1141,7 @@ export const KanbanBoardPage: React.FC = () => {
       </DragDropContext>
       ) : (
         <Card
-          bordered={false}
+          variant="borderless"
           style={{ borderRadius: 10, background: '#ffffff', overflow: 'hidden' }}
           styles={{ body: { padding: 0 } }}
         >

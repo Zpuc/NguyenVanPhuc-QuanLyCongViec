@@ -280,48 +280,48 @@ export const MyTasksPage: React.FC = () => {
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={12} sm={6}>
-          <Card bordered={false} style={{ background: '#eff6ff', borderRadius: 10 }}>
+          <Card variant="borderless" style={{ background: '#eff6ff', borderRadius: 10 }}>
             <Statistic
               title={<span style={{ color: '#1e40af', fontSize: 13 }}>Đang thực hiện</span>}
               value={counts.inProgress}
               prefix={<ClockCircleOutlined style={{ color: '#3b82f6', marginRight: 6 }} />}
-              valueStyle={{ color: '#1e3a8a', fontWeight: 700 }}
+              styles={{ content: { color: '#1e3a8a', fontWeight: 700 } }}
             />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card bordered={false} style={{ background: '#fffbeb', borderRadius: 10 }}>
+          <Card variant="borderless" style={{ background: '#fffbeb', borderRadius: 10 }}>
             <Statistic
               title={<span style={{ color: '#92400e', fontSize: 13 }}>Sắp tới hạn (48h)</span>}
               value={counts.dueSoon}
               prefix={<FieldTimeOutlined style={{ color: '#f59e0b', marginRight: 6 }} />}
-              valueStyle={{ color: '#b45309', fontWeight: 700 }}
+              styles={{ content: { color: '#b45309', fontWeight: 700 } }}
             />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card bordered={false} style={{ background: '#fef2f2', borderRadius: 10 }}>
+          <Card variant="borderless" style={{ background: '#fef2f2', borderRadius: 10 }}>
             <Statistic
               title={<span style={{ color: '#991b1b', fontSize: 13 }}>Đã quá hạn</span>}
               value={counts.overdue}
               prefix={<ExclamationCircleOutlined style={{ color: '#ef4444', marginRight: 6 }} />}
-              valueStyle={{ color: '#b91c1c', fontWeight: 700 }}
+              styles={{ content: { color: '#b91c1c', fontWeight: 700 } }}
             />
           </Card>
         </Col>
         <Col xs={12} sm={6}>
-          <Card bordered={false} style={{ background: '#f0fdf4', borderRadius: 10 }}>
+          <Card variant="borderless" style={{ background: '#f0fdf4', borderRadius: 10 }}>
             <Statistic
               title={<span style={{ color: '#166534', fontSize: 13 }}>Đã hoàn thành</span>}
               value={counts.completed}
               prefix={<CheckCircleOutlined style={{ color: '#10b981', marginRight: 6 }} />}
-              valueStyle={{ color: '#15803d', fontWeight: 700 }}
+              styles={{ content: { color: '#15803d', fontWeight: 700 } }}
             />
           </Card>
         </Col>
       </Row>
 
-      <Card bordered={false} style={{ borderRadius: 12 }}>
+      <Card variant="borderless" style={{ borderRadius: 12 }}>
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} md={10}>
             <Input
