@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../store/useAuthStore';
+import { formatAvatarUrl } from '../api/auth.api';
 import { notificationsApi } from '../api/notifications.api';
 import type { NotificationItem } from '../api/notifications.api';
 
@@ -362,7 +363,7 @@ export const MainLayout: React.FC = () => {
                                 <Avatar
                                     style={{ backgroundColor: '#4f46e5' }}
                                     icon={<UserOutlined />}
-                                    src={user?.avatarUrl}
+                                    src={formatAvatarUrl(user?.avatarUrl)}
                                 />
                                 {!isMobile && <Text strong>{user?.fullName || 'Người dùng'}</Text>}
                             </Space>

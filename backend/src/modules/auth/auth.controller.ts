@@ -1,5 +1,20 @@
-import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+    BadRequestException,
+    Body,
+    Controller,
+    Get,
+    Patch,
+    Post,
+    Req,
+    UploadedFile,
+    UseGuards,
+    UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { existsSync, mkdirSync } from 'fs';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -38,6 +53,39 @@ export class AuthController {
     @ApiOperation({ summary: 'Cập nhật thông tin cá nhân' })
     updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
         return this.authService.updateProfile(req.user.id, dto);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @Patch('profile/avatar')
+    @ApiOperation({ summary: 'Tải lên và cập nhật ảnh đại diện' })
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(
+        FileInterceptor('avatar', {
+            storage: diskStorage({
+                destination: (_req, _file, cb) => {
+                    const uploadPath = join(process.cwd(), 'uploads');
+                    if (!existsSync(uploadPath)) {
+                        mkdirSync(uploadPath, { recursive: true });
+                    }
+                    cb(null, uploadPath);
+                },
+                filename: (_req, file, cb) => {
+                    const uniqueSuffix = `avatar-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+                    cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+                },
+            }),
+            limits: { fileSize: 5 * 1024 * 1024 },
+            fileFilter: (_req, file, cb) => {
+                if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|gif)$/i)) {
+                    return cb(new BadRequestException('Chỉ chấp nhận file ảnh (jpg, jpeg, png, webp, gif)'), false);
+                }
+                cb(null, true);
+            },
+        }),
+    )
+    uploadAvatar(@Req() req: any, @UploadedFile() file: Express.Multer.File) {
+        return this.authService.updateAvatar(req.user.id, file);
     }
 
     @UseGuards(JwtAuthGuard)

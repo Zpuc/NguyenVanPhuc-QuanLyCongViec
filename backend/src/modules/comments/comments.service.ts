@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @Injectable()
 export class CommentsService {
@@ -56,6 +57,30 @@ export class CommentsService {
         return comment;
     }
 
+    async update(commentId: string, userId: string, dto: UpdateCommentDto) {
+        const comment = await this.prisma.taskComment.findUnique({
+            where: { id: commentId },
+        });
+
+        if (!comment) {
+            throw new NotFoundException('không tìm thấy bình luận');
+        }
+
+        if (comment.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền sửa bình luận của người khác');
+        }
+
+        return this.prisma.taskComment.update({
+            where: { id: commentId },
+            data: { content: dto.content },
+            include: {
+                user: {
+                    select: { id: true, fullName: true, avatarUrl: true, email: true },
+                },
+            },
+        });
+    }
+
     async remove(commentId: string, userId: string) {
         const comment = await this.prisma.taskComment.findUnique({
             where: { id: commentId },
@@ -75,7 +100,4 @@ export class CommentsService {
 
         return { message: 'xoá bình luận thành công' };
     }
-
-
-
 }

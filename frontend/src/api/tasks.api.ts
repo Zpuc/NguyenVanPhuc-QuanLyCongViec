@@ -115,6 +115,10 @@ export const tasksApi = {
     return axiosClient.post(`/tasks/${taskId}/comments`, { content });
   },
 
+  updateComment: (commentId: string, content: string): Promise<CommentItem> => {
+    return axiosClient.patch(`/comments/${commentId}`, { content });
+  },
+
   deleteComment: (commentId: string) => {
     return axiosClient.delete(`/comments/${commentId}`);
   },

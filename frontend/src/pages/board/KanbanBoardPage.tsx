@@ -54,6 +54,7 @@ import { projectsApi } from '../../api/projects.api';
 import type { ProjectDetail, ColumnItem, TaskItem } from '../../api/projects.api';
 import { tasksApi } from '../../api/tasks.api';
 import type { TaskDetail, UpdateTaskDto, ActivityLogItem } from '../../api/tasks.api';
+import { formatAvatarUrl } from '../../api/auth.api';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
@@ -107,6 +108,9 @@ export const KanbanBoardPage: React.FC = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [savingTask, setSavingTask] = useState(false);
@@ -273,6 +277,37 @@ export const KanbanBoardPage: React.FC = () => {
     setTaskDetail(null);
     setCommentText('');
     setEditingDescription(false);
+    setEditingCommentId(null);
+    setEditingCommentText('');
+  };
+
+  const handleStartEditComment = (commentId: string, currentContent: string) => {
+    setEditingCommentId(commentId);
+    setEditingCommentText(currentContent);
+  };
+
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentText('');
+  };
+
+  const handleSaveEditComment = async (commentId: string) => {
+    if (!editingCommentText.trim() || !taskDetail) return;
+    try {
+      setSavingComment(true);
+      const updated = await tasksApi.updateComment(commentId, editingCommentText.trim());
+      setTaskDetail({
+        ...taskDetail,
+        comments: taskDetail.comments.map((c) => (c.id === commentId ? { ...c, content: updated.content } : c)),
+      });
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      message.success('Đã cập nhật bình luận');
+    } catch (err: any) {
+      message.error(err.message || 'Không thể cập nhật bình luận');
+    } finally {
+      setSavingComment(false);
+    }
   };
 
   const handleAddComment = async () => {
@@ -578,7 +613,7 @@ export const KanbanBoardPage: React.FC = () => {
             {project.members.map((m) => (
               <Tooltip key={m.id} title={`${m.user.fullName} (${roleLabels[m.role]?.label || m.role})`}>
                 <Avatar
-                  src={m.user.avatarUrl}
+                  src={formatAvatarUrl(m.user.avatarUrl)}
                   icon={<UserOutlined />}
                   style={{ backgroundColor: m.role === 'OWNER' ? '#eab308' : '#4f46e5' }}
                 />
@@ -861,7 +896,7 @@ export const KanbanBoardPage: React.FC = () => {
                                     <Avatar
                                       size={22}
                                       icon={<UserOutlined />}
-                                      src={task.assignee?.avatarUrl}
+                                      src={formatAvatarUrl(task.assignee?.avatarUrl)}
                                       style={{ backgroundColor: '#4f46e5' }}
                                     />
                                   </Space>
@@ -948,7 +983,7 @@ export const KanbanBoardPage: React.FC = () => {
               {project.members.map((m) => (
                 <Select.Option key={m.user.id} value={m.user.id}>
                   <Space>
-                    <Avatar size={18} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                    <Avatar size={18} icon={<UserOutlined />} src={formatAvatarUrl(m.user.avatarUrl)} />
                     <span>{m.user.fullName}</span>
                   </Space>
                 </Select.Option>
@@ -1075,7 +1110,7 @@ export const KanbanBoardPage: React.FC = () => {
                   {project.members.map((m) => (
                     <Select.Option key={m.user.id} value={m.user.id}>
                       <Space size={6}>
-                        <Avatar size={16} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                        <Avatar size={16} icon={<UserOutlined />} src={formatAvatarUrl(m.user.avatarUrl)} />
                         <span>{m.user.fullName}</span>
                       </Space>
                     </Select.Option>
@@ -1332,7 +1367,7 @@ export const KanbanBoardPage: React.FC = () => {
                               avatar={
                                 <Avatar
                                   icon={<UserOutlined />}
-                                  src={item.user.avatarUrl}
+                                  src={formatAvatarUrl(item.user.avatarUrl)}
                                   style={{ backgroundColor: '#4f46e5' }}
                                 />
                               }
@@ -1354,34 +1389,67 @@ export const KanbanBoardPage: React.FC = () => {
                                   </Space>
 
                                   {currentUser?.id === item.user.id && (
-                                    <Popconfirm
-                                      title="Xóa bình luận"
-                                      description="Bạn có chắc chắn muốn xóa bình luận này?"
-                                      onConfirm={() => handleDeleteComment(item.id)}
-                                      okText="Xóa"
-                                      cancelText="Hủy"
-                                    >
+                                    <Space size={4}>
                                       <Button
                                         type="text"
                                         size="small"
-                                        danger
-                                        icon={<DeleteOutlined />}
+                                        icon={<EditOutlined />}
+                                        onClick={() => handleStartEditComment(item.id, item.content)}
                                       />
-                                    </Popconfirm>
+                                      <Popconfirm
+                                        title="Xóa bình luận"
+                                        description="Bạn có chắc chắn muốn xóa bình luận này?"
+                                        onConfirm={() => handleDeleteComment(item.id)}
+                                        okText="Xóa"
+                                        cancelText="Hủy"
+                                      >
+                                        <Button
+                                          type="text"
+                                          size="small"
+                                          danger
+                                          icon={<DeleteOutlined />}
+                                        />
+                                      </Popconfirm>
+                                    </Space>
                                   )}
                                 </div>
                               }
                               description={
-                                <div
-                                  style={{
-                                    marginTop: 4,
-                                    color: '#334155',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                  }}
-                                >
-                                  {item.content}
-                                </div>
+                                editingCommentId === item.id ? (
+                                  <div style={{ marginTop: 8 }}>
+                                    <Input.TextArea
+                                      rows={2}
+                                      value={editingCommentText}
+                                      onChange={(e) => setEditingCommentText(e.target.value)}
+                                      autoFocus
+                                    />
+                                    <Space size={8} style={{ marginTop: 8 }}>
+                                      <Button
+                                        type="primary"
+                                        size="small"
+                                        loading={savingComment}
+                                        disabled={!editingCommentText.trim()}
+                                        onClick={() => handleSaveEditComment(item.id)}
+                                      >
+                                        Lưu
+                                      </Button>
+                                      <Button size="small" onClick={handleCancelEditComment} disabled={savingComment}>
+                                        Hủy
+                                      </Button>
+                                    </Space>
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      marginTop: 4,
+                                      color: '#334155',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {item.content}
+                                  </div>
+                                )
                               }
                             />
                           </List.Item>
@@ -1468,7 +1536,7 @@ export const KanbanBoardPage: React.FC = () => {
                   <Avatar
                     size={38}
                     icon={<UserOutlined />}
-                    src={owner.user.avatarUrl}
+                    src={formatAvatarUrl(owner.user.avatarUrl)}
                     style={{ backgroundColor: '#eab308' }}
                   />
                   <div>
@@ -1529,7 +1597,7 @@ export const KanbanBoardPage: React.FC = () => {
                           <Avatar
                             size={34}
                             icon={<UserOutlined />}
-                            src={member.user.avatarUrl}
+                            src={formatAvatarUrl(member.user.avatarUrl)}
                             style={{ backgroundColor: '#4f46e5' }}
                           />
                         }

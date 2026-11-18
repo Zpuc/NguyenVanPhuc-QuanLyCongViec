@@ -33,6 +33,14 @@ export interface AuthResponse {
     accessToken: string;
 }
 
+export const formatAvatarUrl = (url?: string | null): string | undefined => {
+    if (!url) return undefined;
+    if (url.startsWith('/uploads/')) {
+        return `http://localhost:3000${url}`;
+    }
+    return url;
+};
+
 export const authApi = {
     login: (data: LoginDto): Promise<AuthResponse> => {
         return axiosClient.post('/auth/login', data);
@@ -48,6 +56,16 @@ export const authApi = {
 
     updateProfile: (data: UpdateProfileDto): Promise<User> => {
         return axiosClient.patch('/auth/profile', data);
+    },
+
+    uploadAvatar: (file: File): Promise<User> => {
+        const formData = new FormData();
+        formData.append('avatar', file);
+        return axiosClient.patch('/auth/profile/avatar', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
     },
 
     changePassword: (data: ChangePasswordDto): Promise<{ message: string }> => {

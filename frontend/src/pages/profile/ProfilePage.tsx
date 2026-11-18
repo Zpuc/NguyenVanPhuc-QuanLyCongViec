@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Typography, Row, Col, Card, Form, Input, Button, Avatar, Space, Tag, message } from 'antd';
-import { UserOutlined, LockOutlined, SaveOutlined, MailOutlined } from '@ant-design/icons';
-import { authApi } from '../../api/auth.api';
+import { Typography, Row, Col, Card, Form, Input, Button, Avatar, Space, Tag, Upload, message } from 'antd';
+import { UserOutlined, LockOutlined, SaveOutlined, MailOutlined, CameraOutlined } from '@ant-design/icons';
+import { authApi, formatAvatarUrl } from '../../api/auth.api';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text } = Typography;
@@ -12,6 +12,7 @@ export const ProfilePage: React.FC = () => {
   const [passwordForm] = Form.useForm();
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -21,6 +22,30 @@ export const ProfilePage: React.FC = () => {
       });
     }
   }, [user, profileForm]);
+
+  const handleUploadAvatar = async (file: File) => {
+    const isImage = file.type.startsWith('image/');
+    if (!isImage) {
+      message.error('Vui lòng chọn tệp hình ảnh!');
+      return;
+    }
+    const isLt5M = file.size / 1024 / 1024 < 5;
+    if (!isLt5M) {
+      message.error('Kích thước ảnh tối đa là 5MB!');
+      return;
+    }
+
+    try {
+      setUploadingAvatar(true);
+      const updatedUser = await authApi.uploadAvatar(file);
+      updateUser(updatedUser);
+      message.success('Cập nhật ảnh đại diện thành công!');
+    } catch (err: any) {
+      message.error(err.message || 'Không thể tải lên ảnh đại diện');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleUpdateProfile = async (values: { fullName: string }) => {
     try {
@@ -67,21 +92,35 @@ export const ProfilePage: React.FC = () => {
             style={{ background: '#f8fafc', borderRadius: 12, height: '100%' }}
             title="Thông tin cơ bản"
           >
-            <Space size={16} style={{ marginBottom: 24 }}>
+            <Space size={16} align="center" style={{ marginBottom: 24 }}>
               <Avatar
-                size={64}
+                size={72}
                 icon={<UserOutlined />}
-                src={user?.avatarUrl}
+                src={formatAvatarUrl(user?.avatarUrl)}
                 style={{ backgroundColor: '#4f46e5' }}
               />
               <div>
                 <Title level={4} style={{ margin: 0 }}>
                   {user?.fullName}
                 </Title>
-                <Space size={8} style={{ marginTop: 4 }}>
+                <Space size={8} style={{ marginTop: 4, marginBottom: 8 }} wrap>
                   <Text type="secondary">{user?.email}</Text>
                   <Tag color="blue">{user?.systemRole || 'USER'}</Tag>
                 </Space>
+                <div>
+                  <Upload
+                    beforeUpload={(file) => {
+                      handleUploadAvatar(file);
+                      return false;
+                    }}
+                    showUploadList={false}
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                  >
+                    <Button icon={<CameraOutlined />} size="small" loading={uploadingAvatar}>
+                      Tải ảnh đại diện
+                    </Button>
+                  </Upload>
+                </div>
               </div>
             </Space>
 
