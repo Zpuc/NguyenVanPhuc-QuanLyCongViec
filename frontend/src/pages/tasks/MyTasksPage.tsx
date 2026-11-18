@@ -48,7 +48,7 @@ export const MyTasksPage: React.FC = () => {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<MyTaskItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('in_progress');
+  const [activeTab, setActiveTab] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [selectedProject, setSelectedProject] = useState<string>('ALL');
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
@@ -161,6 +161,20 @@ export const MyTasksPage: React.FC = () => {
 
   const tabItems = [
     {
+      key: 'all',
+      label: (
+        <Space size={6}>
+          <UnorderedListOutlined />
+          <span>Tất cả</span>
+          <Badge
+            count={counts.all}
+            overflowCount={99}
+            style={{ backgroundColor: '#64748b' }}
+          />
+        </Space>
+      ),
+    },
+    {
       key: 'in_progress',
       label: (
         <Space size={6}>
@@ -212,20 +226,6 @@ export const MyTasksPage: React.FC = () => {
             count={counts.completed}
             overflowCount={99}
             style={{ backgroundColor: '#10b981' }}
-          />
-        </Space>
-      ),
-    },
-    {
-      key: 'all',
-      label: (
-        <Space size={6}>
-          <UnorderedListOutlined />
-          <span>Tất cả</span>
-          <Badge
-            count={counts.all}
-            overflowCount={99}
-            style={{ backgroundColor: '#64748b' }}
           />
         </Space>
       ),
