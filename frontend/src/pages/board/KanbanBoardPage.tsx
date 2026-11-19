@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import {
@@ -26,8 +26,12 @@ import {
   Tabs,
   Timeline,
   Empty,
+  Table,
+  Segmented,
+  Checkbox,
+  Progress,
 } from 'antd';
-import type { MenuProps } from 'antd';
+import type { MenuProps, TableColumnsType } from 'antd';
 import {
   ArrowLeftOutlined,
   PlusOutlined,
@@ -47,6 +51,10 @@ import {
   FileOutlined,
   FileImageOutlined,
   HistoryOutlined,
+  AppstoreOutlined,
+  TableOutlined,
+  EyeOutlined,
+  CheckSquareOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
@@ -54,6 +62,7 @@ import { projectsApi } from '../../api/projects.api';
 import type { ProjectDetail, ColumnItem, TaskItem } from '../../api/projects.api';
 import { tasksApi } from '../../api/tasks.api';
 import type { TaskDetail, UpdateTaskDto, ActivityLogItem } from '../../api/tasks.api';
+import { formatAvatarUrl } from '../../api/auth.api';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const { Title, Text, Paragraph } = Typography;
@@ -90,11 +99,18 @@ const columnColors = [
   '#06b6d4',
 ];
 
+interface TableTaskRow extends TaskItem {
+  columnId: string;
+  columnTitle: string;
+  columnColor?: string;
+}
+
 export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -107,10 +123,15 @@ export const KanbanBoardPage: React.FC = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const [addingChecklist, setAddingChecklist] = useState(false);
 
   const [isMembersDrawerOpen, setIsMembersDrawerOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -273,6 +294,38 @@ export const KanbanBoardPage: React.FC = () => {
     setTaskDetail(null);
     setCommentText('');
     setEditingDescription(false);
+    setEditingCommentId(null);
+    setEditingCommentText('');
+    setNewChecklistTitle('');
+  };
+
+  const handleStartEditComment = (commentId: string, currentContent: string) => {
+    setEditingCommentId(commentId);
+    setEditingCommentText(currentContent);
+  };
+
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentText('');
+  };
+
+  const handleSaveEditComment = async (commentId: string) => {
+    if (!editingCommentText.trim() || !taskDetail) return;
+    try {
+      setSavingComment(true);
+      const updated = await tasksApi.updateComment(commentId, editingCommentText.trim());
+      setTaskDetail({
+        ...taskDetail,
+        comments: taskDetail.comments.map((c) => (c.id === commentId ? { ...c, content: updated.content } : c)),
+      });
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      message.success('Đã cập nhật bình luận');
+    } catch (err: any) {
+      message.error(err.message || 'Không thể cập nhật bình luận');
+    } finally {
+      setSavingComment(false);
+    }
   };
 
   const handleAddComment = async () => {
@@ -356,6 +409,54 @@ export const KanbanBoardPage: React.FC = () => {
       fetchProjectDetail();
     } catch (err: any) {
       message.error(err.message || 'Xóa tệp đính kèm thất bại');
+    }
+  };
+
+  const handleCreateChecklist = async () => {
+    if (!taskDetail || !newChecklistTitle.trim()) return;
+    try {
+      setAddingChecklist(true);
+      const created = await tasksApi.createChecklist(taskDetail.id, newChecklistTitle.trim());
+      setTaskDetail({
+        ...taskDetail,
+        checklists: [...(taskDetail.checklists || []), created],
+      });
+      setNewChecklistTitle('');
+      message.success('Đã thêm việc cần làm');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể thêm việc cần làm');
+    } finally {
+      setAddingChecklist(false);
+    }
+  };
+
+  const handleToggleChecklist = async (checklistId: string, isCompleted: boolean) => {
+    if (!taskDetail) return;
+    try {
+      const updated = await tasksApi.updateChecklist(checklistId, { isCompleted });
+      setTaskDetail({
+        ...taskDetail,
+        checklists: (taskDetail.checklists || []).map((c) => (c.id === checklistId ? updated : c)),
+      });
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể cập nhật việc cần làm');
+    }
+  };
+
+  const handleDeleteChecklist = async (checklistId: string) => {
+    if (!taskDetail) return;
+    try {
+      await tasksApi.deleteChecklist(checklistId);
+      setTaskDetail({
+        ...taskDetail,
+        checklists: (taskDetail.checklists || []).filter((c) => c.id !== checklistId),
+      });
+      message.success('Đã xóa việc cần làm');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể xóa việc cần làm');
     }
   };
 
@@ -488,25 +589,13 @@ export const KanbanBoardPage: React.FC = () => {
     });
   };
 
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '100px 0' }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  if (!project) {
-    return null;
-  }
-
-  const currentMember = project.members.find((m) => m.user.id === currentUser?.id);
+  const currentMember = project?.members.find((m) => m.user.id === currentUser?.id);
   const isOwner = currentMember?.role === 'OWNER';
   const isOwnerOrAdmin = isOwner || currentMember?.role === 'ADMIN';
   const canEditTask = currentMember?.role !== 'VIEWER';
 
-  const ownerMembers = project.members.filter((m) => m.role === 'OWNER');
-  const invitedMembers = project.members.filter((m) => m.role !== 'OWNER');
+  const ownerMembers = project?.members.filter((m) => m.role === 'OWNER') || [];
+  const invitedMembers = project?.members.filter((m) => m.role !== 'OWNER') || [];
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -537,7 +626,7 @@ export const KanbanBoardPage: React.FC = () => {
       if (filterSearch.trim()) {
         const q = filterSearch.trim().toLowerCase();
         const matchesTitle = task.title.toLowerCase().includes(q);
-        const matchesKey = `${project.key}-${task.taskNumber}`.toLowerCase().includes(q);
+        const matchesKey = project ? `${project.key}-${task.taskNumber}`.toLowerCase().includes(q) : false;
         const matchesAssignee = task.assignee?.fullName.toLowerCase().includes(q);
         if (!matchesTitle && !matchesKey && !matchesAssignee) {
           return false;
@@ -546,6 +635,215 @@ export const KanbanBoardPage: React.FC = () => {
       return true;
     });
   };
+
+  const allProjectTasks = useMemo(() => {
+    if (!project) return [];
+    const rows: TableTaskRow[] = [];
+    project.columns.forEach((col) => {
+      col.tasks.forEach((t) => {
+        rows.push({
+          ...t,
+          columnId: col.id,
+          columnTitle: col.title,
+          columnColor: col.color,
+        });
+      });
+    });
+    return rows;
+  }, [project]);
+
+  const filteredTableTasks = useMemo(() => {
+    return getFilteredTasks(allProjectTasks as any) as TableTaskRow[];
+  }, [allProjectTasks, filterSearch, filterPriority, filterOnlyMyTasks]);
+
+  const tableColumns: TableColumnsType<TableTaskRow> = useMemo(() => {
+    if (!project) return [];
+    return [
+      {
+        title: 'Mã & Tên công việc',
+        dataIndex: 'title',
+        key: 'title',
+        sorter: (a, b) => a.taskNumber - b.taskNumber,
+        render: (title: string, record: TableTaskRow) => {
+          const code = `${project.key}-${record.taskNumber}`;
+          return (
+            <Space direction="vertical" size={2}>
+              <Space size={8} wrap>
+                <Tag color="purple" style={{ fontWeight: 600, margin: 0 }}>
+                  {code}
+                </Tag>
+                <Text strong style={{ fontSize: 14, color: '#0f172a' }}>
+                  {title}
+                </Text>
+              </Space>
+              {record.description && (
+                <Text
+                  type="secondary"
+                  ellipsis={{ tooltip: record.description }}
+                  style={{ margin: 0, fontSize: 12, maxWidth: 360, display: 'block' }}
+                >
+                  {record.description}
+                </Text>
+              )}
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'Trạng thái',
+        dataIndex: 'columnTitle',
+        key: 'columnTitle',
+        filters: project.columns.map((c) => ({ text: c.title, value: c.id })),
+        onFilter: (value, record) => record.columnId === value,
+        render: (_, record: TableTaskRow) => (
+          <Tag
+            style={{
+              fontWeight: 600,
+              borderRadius: 4,
+              background: '#f8fafc',
+              borderColor: record.columnColor || '#cbd5e1',
+              color: record.columnColor || '#475569',
+            }}
+          >
+            {record.columnTitle}
+          </Tag>
+        ),
+      },
+      {
+        title: 'Mức ưu tiên',
+        dataIndex: 'priority',
+        key: 'priority',
+        filters: [
+          { text: 'Khẩn cấp', value: 'URGENT' },
+          { text: 'Cao', value: 'HIGH' },
+          { text: 'Trung bình', value: 'MEDIUM' },
+          { text: 'Thấp', value: 'LOW' },
+        ],
+        onFilter: (value, record) => record.priority === value,
+        sorter: (a, b) => {
+          const weight: Record<string, number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+          return (weight[a.priority] || 0) - (weight[b.priority] || 0);
+        },
+        render: (priority: string) => {
+          const label = priorityLabels[priority] || priority;
+          const color = priorityColors[priority] || 'default';
+          return <Tag color={color}>{label}</Tag>;
+        },
+      },
+      {
+        title: 'Người thực hiện',
+        dataIndex: 'assignee',
+        key: 'assignee',
+        filters: [
+          { text: 'Chưa phân công', value: 'UNASSIGNED' },
+          ...project.members.map((m) => ({ text: m.user.fullName, value: m.user.id })),
+        ],
+        onFilter: (value, record) => {
+          if (value === 'UNASSIGNED') return !record.assignee;
+          return record.assignee?.id === value;
+        },
+        render: (_, record: TableTaskRow) => {
+          if (!record.assignee) {
+            return <Tag style={{ color: '#94a3b8' }}>Chưa phân công</Tag>;
+          }
+          return (
+            <Space size={8}>
+              <Avatar
+                size={24}
+                icon={<UserOutlined />}
+                src={formatAvatarUrl(record.assignee.avatarUrl)}
+                style={{ backgroundColor: '#4f46e5' }}
+              />
+              <span style={{ fontSize: 13 }}>{record.assignee.fullName}</span>
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'Hạn chót',
+        dataIndex: 'dueDate',
+        key: 'dueDate',
+        sorter: (a, b) => {
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        },
+        render: (dueDate: string | undefined, record: TableTaskRow) => {
+          if (!dueDate) {
+            return <Text type="secondary" style={{ fontSize: 12 }}>Chưa đặt</Text>;
+          }
+          const due = new Date(dueDate);
+          const lower = record.columnTitle.toLowerCase();
+          const isDone = lower.includes('done') || lower.includes('hoàn thành') || lower.includes('xong');
+          const isOverdue = !isDone && due.getTime() < Date.now();
+          return (
+            <Space size={4} style={{ color: isOverdue ? '#ef4444' : '#64748b', fontWeight: isOverdue ? 600 : 400 }}>
+              <CalendarOutlined />
+              <span style={{ fontSize: 13 }}>{due.toLocaleDateString('vi-VN')}</span>
+              {isOverdue && <Tag color="red" style={{ fontSize: 10, margin: 0 }}>Quá hạn</Tag>}
+            </Space>
+          );
+        },
+      },
+      {
+        title: 'Tương tác',
+        key: 'interactions',
+        width: 130,
+        render: (_, record: TableTaskRow) => {
+          const totalSub = record.checklists?.length || 0;
+          const doneSub = record.checklists?.filter((c) => c.isCompleted).length || 0;
+          return (
+            <Space size={10} style={{ color: '#64748b', fontSize: 12 }}>
+              {totalSub > 0 && (
+                <Space size={4} style={{ color: doneSub === totalSub ? '#10b981' : '#4f46e5', fontWeight: 500 }}>
+                  <CheckSquareOutlined />
+                  <span>{doneSub}/{totalSub}</span>
+                </Space>
+              )}
+              <Space size={4}>
+                <CommentOutlined />
+                <span>{record._count?.comments || 0}</span>
+              </Space>
+              <Space size={4}>
+                <PaperClipOutlined />
+                <span>{record._count?.attachments || 0}</span>
+              </Space>
+            </Space>
+          );
+        },
+      },
+      {
+        title: '',
+        key: 'actions',
+        width: 90,
+        render: (_, record: TableTaskRow) => (
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenTaskDetail(record.id);
+            }}
+          >
+            Chi tiết
+          </Button>
+        ),
+      },
+    ];
+  }, [project]);
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '100px 0' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return null;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -578,7 +876,7 @@ export const KanbanBoardPage: React.FC = () => {
             {project.members.map((m) => (
               <Tooltip key={m.id} title={`${m.user.fullName} (${roleLabels[m.role]?.label || m.role})`}>
                 <Avatar
-                  src={m.user.avatarUrl}
+                  src={formatAvatarUrl(m.user.avatarUrl)}
                   icon={<UserOutlined />}
                   style={{ backgroundColor: m.role === 'OWNER' ? '#eab308' : '#4f46e5' }}
                 />
@@ -665,14 +963,26 @@ export const KanbanBoardPage: React.FC = () => {
           )}
         </Space>
 
-        {isFiltered && (
-          <Tag color="blue" icon={<FilterOutlined />}>
-            Đang lọc kết quả
-          </Tag>
-        )}
+        <Space size={12} wrap align="center" style={isMobile ? { width: '100%', justifyContent: 'space-between' } : undefined}>
+          {isFiltered && (
+            <Tag color="blue" icon={<FilterOutlined />}>
+              Đang lọc kết quả
+            </Tag>
+          )}
+
+          <Segmented
+            value={viewMode}
+            onChange={(val) => setViewMode(val as 'kanban' | 'table')}
+            options={[
+              { label: 'Bảng Kanban', value: 'kanban', icon: <AppstoreOutlined /> },
+              { label: 'Dạng bảng', value: 'table', icon: <TableOutlined /> },
+            ]}
+          />
+        </Space>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
+      {viewMode === 'kanban' ? (
+        <DragDropContext onDragEnd={handleDragEnd}>
         <div
           style={{
             display: 'flex',
@@ -842,6 +1152,25 @@ export const KanbanBoardPage: React.FC = () => {
                                   </div>
                                 )}
 
+                                {task.checklists && task.checklists.length > 0 && (() => {
+                                  const total = task.checklists.length;
+                                  const completed = task.checklists.filter((c) => c.isCompleted).length;
+                                  const percent = Math.round((completed / total) * 100);
+                                  const allDone = completed === total;
+                                  return (
+                                    <div style={{ marginBottom: 8 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 2 }}>
+                                        <Space size={4} style={{ color: allDone ? '#10b981' : '#64748b' }}>
+                                          <CheckSquareOutlined />
+                                          <span>{completed}/{total} việc con</span>
+                                        </Space>
+                                        <Text type="secondary" style={{ fontSize: 10 }}>{percent}%</Text>
+                                      </div>
+                                      <Progress percent={percent} size="small" showInfo={false} strokeColor={allDone ? '#10b981' : '#4f46e5'} style={{ margin: 0 }} />
+                                    </div>
+                                  );
+                                })()}
+
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <Tag color={priorityColors[task.priority]} style={{ margin: 0 }}>
                                     {priorityLabels[task.priority]}
@@ -861,7 +1190,7 @@ export const KanbanBoardPage: React.FC = () => {
                                     <Avatar
                                       size={22}
                                       icon={<UserOutlined />}
-                                      src={task.assignee?.avatarUrl}
+                                      src={formatAvatarUrl(task.assignee?.avatarUrl)}
                                       style={{ backgroundColor: '#4f46e5' }}
                                     />
                                   </Space>
@@ -893,6 +1222,38 @@ export const KanbanBoardPage: React.FC = () => {
           })}
         </div>
       </DragDropContext>
+      ) : (
+        <Card
+          variant="borderless"
+          style={{ borderRadius: 10, background: '#ffffff', overflow: 'hidden' }}
+          styles={{ body: { padding: 0 } }}
+        >
+          <Table<TableTaskRow>
+            rowKey="id"
+            columns={tableColumns}
+            dataSource={filteredTableTasks}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: ['10', '20', '50'],
+              showTotal: (total) => `Tổng cộng ${total} công việc`,
+            }}
+            onRow={(record) => ({
+              onClick: () => handleOpenTaskDetail(record.id),
+              style: { cursor: 'pointer' },
+            })}
+            scroll={{ x: 850 }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={isFiltered ? 'Không có công việc nào khớp với bộ lọc' : 'Dự án chưa có công việc nào'}
+                  style={{ padding: '32px 0' }}
+                />
+              ),
+            }}
+          />
+        </Card>
+      )}
 
       <Modal
         title="Thêm công việc mới"
@@ -948,7 +1309,7 @@ export const KanbanBoardPage: React.FC = () => {
               {project.members.map((m) => (
                 <Select.Option key={m.user.id} value={m.user.id}>
                   <Space>
-                    <Avatar size={18} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                    <Avatar size={18} icon={<UserOutlined />} src={formatAvatarUrl(m.user.avatarUrl)} />
                     <span>{m.user.fullName}</span>
                   </Space>
                 </Select.Option>
@@ -1075,7 +1436,7 @@ export const KanbanBoardPage: React.FC = () => {
                   {project.members.map((m) => (
                     <Select.Option key={m.user.id} value={m.user.id}>
                       <Space size={6}>
-                        <Avatar size={16} icon={<UserOutlined />} src={m.user.avatarUrl} />
+                        <Avatar size={16} icon={<UserOutlined />} src={formatAvatarUrl(m.user.avatarUrl)} />
                         <span>{m.user.fullName}</span>
                       </Space>
                     </Select.Option>
@@ -1170,6 +1531,106 @@ export const KanbanBoardPage: React.FC = () => {
                     <Text type="secondary">Chưa có mô tả chi tiết</Text>
                   )}
                 </div>
+              )}
+            </div>
+
+            <Divider style={{ margin: '4px 0' }} />
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Space size={8}>
+                  <CheckSquareOutlined style={{ color: '#4f46e5' }} />
+                  <Title level={5} style={{ margin: 0 }}>
+                    Việc cần làm ({taskDetail.checklists?.filter((c) => c.isCompleted).length || 0}/
+                    {taskDetail.checklists?.length || 0})
+                  </Title>
+                </Space>
+              </div>
+
+              {taskDetail.checklists && taskDetail.checklists.length > 0 && (() => {
+                const total = taskDetail.checklists.length;
+                const completed = taskDetail.checklists.filter((c) => c.isCompleted).length;
+                const percent = Math.round((completed / total) * 100);
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <Progress
+                      percent={percent}
+                      status={percent === 100 ? 'success' : 'active'}
+                      strokeColor={percent === 100 ? '#10b981' : '#4f46e5'}
+                    />
+                  </div>
+                );
+              })()}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                {taskDetail.checklists?.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: item.isCompleted ? '#f8fafc' : '#ffffff',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Checkbox
+                      checked={item.isCompleted}
+                      disabled={!canEditTask}
+                      onChange={(e) => handleToggleChecklist(item.id, e.target.checked)}
+                      style={{ flex: 1 }}
+                    >
+                      <span
+                        style={{
+                          textDecoration: item.isCompleted ? 'line-through' : 'none',
+                          color: item.isCompleted ? '#94a3b8' : '#1e293b',
+                          fontSize: 14,
+                        }}
+                      >
+                        {item.title}
+                      </span>
+                    </Checkbox>
+
+                    {canEditTask && (
+                      <Popconfirm
+                        title="Xóa việc con này?"
+                        onConfirm={() => handleDeleteChecklist(item.id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                      >
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                        />
+                      </Popconfirm>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {canEditTask && (
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input
+                    placeholder="Thêm việc cần làm (nhấn Enter để thêm)..."
+                    value={newChecklistTitle}
+                    onChange={(e) => setNewChecklistTitle(e.target.value)}
+                    onPressEnter={handleCreateChecklist}
+                    disabled={addingChecklist}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleCreateChecklist}
+                    loading={addingChecklist}
+                    disabled={!newChecklistTitle.trim()}
+                  >
+                    Thêm
+                  </Button>
+                </Space.Compact>
               )}
             </div>
 
@@ -1332,7 +1793,7 @@ export const KanbanBoardPage: React.FC = () => {
                               avatar={
                                 <Avatar
                                   icon={<UserOutlined />}
-                                  src={item.user.avatarUrl}
+                                  src={formatAvatarUrl(item.user.avatarUrl)}
                                   style={{ backgroundColor: '#4f46e5' }}
                                 />
                               }
@@ -1354,34 +1815,67 @@ export const KanbanBoardPage: React.FC = () => {
                                   </Space>
 
                                   {currentUser?.id === item.user.id && (
-                                    <Popconfirm
-                                      title="Xóa bình luận"
-                                      description="Bạn có chắc chắn muốn xóa bình luận này?"
-                                      onConfirm={() => handleDeleteComment(item.id)}
-                                      okText="Xóa"
-                                      cancelText="Hủy"
-                                    >
+                                    <Space size={4}>
                                       <Button
                                         type="text"
                                         size="small"
-                                        danger
-                                        icon={<DeleteOutlined />}
+                                        icon={<EditOutlined />}
+                                        onClick={() => handleStartEditComment(item.id, item.content)}
                                       />
-                                    </Popconfirm>
+                                      <Popconfirm
+                                        title="Xóa bình luận"
+                                        description="Bạn có chắc chắn muốn xóa bình luận này?"
+                                        onConfirm={() => handleDeleteComment(item.id)}
+                                        okText="Xóa"
+                                        cancelText="Hủy"
+                                      >
+                                        <Button
+                                          type="text"
+                                          size="small"
+                                          danger
+                                          icon={<DeleteOutlined />}
+                                        />
+                                      </Popconfirm>
+                                    </Space>
                                   )}
                                 </div>
                               }
                               description={
-                                <div
-                                  style={{
-                                    marginTop: 4,
-                                    color: '#334155',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                  }}
-                                >
-                                  {item.content}
-                                </div>
+                                editingCommentId === item.id ? (
+                                  <div style={{ marginTop: 8 }}>
+                                    <Input.TextArea
+                                      rows={2}
+                                      value={editingCommentText}
+                                      onChange={(e) => setEditingCommentText(e.target.value)}
+                                      autoFocus
+                                    />
+                                    <Space size={8} style={{ marginTop: 8 }}>
+                                      <Button
+                                        type="primary"
+                                        size="small"
+                                        loading={savingComment}
+                                        disabled={!editingCommentText.trim()}
+                                        onClick={() => handleSaveEditComment(item.id)}
+                                      >
+                                        Lưu
+                                      </Button>
+                                      <Button size="small" onClick={handleCancelEditComment} disabled={savingComment}>
+                                        Hủy
+                                      </Button>
+                                    </Space>
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      marginTop: 4,
+                                      color: '#334155',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {item.content}
+                                  </div>
+                                )
                               }
                             />
                           </List.Item>
@@ -1468,7 +1962,7 @@ export const KanbanBoardPage: React.FC = () => {
                   <Avatar
                     size={38}
                     icon={<UserOutlined />}
-                    src={owner.user.avatarUrl}
+                    src={formatAvatarUrl(owner.user.avatarUrl)}
                     style={{ backgroundColor: '#eab308' }}
                   />
                   <div>
@@ -1529,7 +2023,7 @@ export const KanbanBoardPage: React.FC = () => {
                           <Avatar
                             size={34}
                             icon={<UserOutlined />}
-                            src={member.user.avatarUrl}
+                            src={formatAvatarUrl(member.user.avatarUrl)}
                             style={{ backgroundColor: '#4f46e5' }}
                           />
                         }

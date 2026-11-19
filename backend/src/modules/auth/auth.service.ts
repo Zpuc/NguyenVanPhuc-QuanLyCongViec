@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -93,11 +95,48 @@ export class AuthService {
         };
     }
 
-
     async updateProfile(userId: string, dto: UpdateProfileDto) {
         return this.prisma.user.update({
             where: { id: userId },
             data: { fullName: dto.fullName.trim() },
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                avatarUrl: true,
+                systemRole: true,
+                createdAt: true,
+            },
+        });
+    }
+
+    async updateAvatar(userId: string, file?: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn ảnh đại diện hợp lệ');
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Không tìm thấy tài khoản');
+        }
+
+        if (user.avatarUrl && user.avatarUrl.startsWith('/uploads/avatar-')) {
+            const oldPath = join(process.cwd(), user.avatarUrl);
+            try {
+                if (existsSync(oldPath)) {
+                    unlinkSync(oldPath);
+                }
+            } catch {}
+        }
+
+        const avatarUrl = `/uploads/${file.filename}`;
+
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: { avatarUrl },
             select: {
                 id: true,
                 email: true,

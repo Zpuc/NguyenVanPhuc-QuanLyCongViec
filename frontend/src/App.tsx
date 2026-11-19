@@ -7,6 +7,7 @@ import { ProjectsPage } from './pages/projects/ProjectsPage';
 import { TeamProjectsPage } from './pages/projects/TeamProjectsPage';
 import { KanbanBoardPage } from './pages/board/KanbanBoardPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
+import { MyTasksPage } from './pages/tasks/MyTasksPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
 
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/my-tasks" element={<MyTasksPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/team-projects" element={<TeamProjectsPage />} />
           <Route path="/projects/:id" element={<KanbanBoardPage />} />

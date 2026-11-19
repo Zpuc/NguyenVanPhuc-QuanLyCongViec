@@ -88,9 +88,53 @@ export interface TaskDetail {
   comments: CommentItem[];
   attachments: AttachmentItem[];
   activityLogs?: ActivityLogItem[];
+  checklists?: ChecklistItem[];
+}
+
+export interface ChecklistItem {
+  id: string;
+  taskId: string;
+  title: string;
+  isCompleted: boolean;
+  positionOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MyTaskItem {
+  id: string;
+  projectId: string;
+  columnId: string;
+  taskNumber: number;
+  title: string;
+  description?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  positionOrder: number;
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  project: {
+    id: string;
+    name: string;
+    key: string;
+  };
+  column: {
+    id: string;
+    title: string;
+    color?: string;
+    positionOrder?: number;
+  };
+  _count: {
+    comments: number;
+    attachments: number;
+  };
 }
 
 export const tasksApi = {
+  getMyTasks: (): Promise<MyTaskItem[]> => {
+    return axiosClient.get('/tasks/my-tasks');
+  },
+
   createTask: (data: CreateTaskDto) => {
     return axiosClient.post('/tasks', data);
   },
@@ -115,6 +159,10 @@ export const tasksApi = {
     return axiosClient.post(`/tasks/${taskId}/comments`, { content });
   },
 
+  updateComment: (commentId: string, content: string): Promise<CommentItem> => {
+    return axiosClient.patch(`/comments/${commentId}`, { content });
+  },
+
   deleteComment: (commentId: string) => {
     return axiosClient.delete(`/comments/${commentId}`);
   },
@@ -131,5 +179,17 @@ export const tasksApi = {
 
   deleteAttachment: (attachmentId: string) => {
     return axiosClient.delete(`/tasks/attachments/${attachmentId}`);
+  },
+
+  createChecklist: (taskId: string, title: string): Promise<ChecklistItem> => {
+    return axiosClient.post(`/tasks/${taskId}/checklists`, { title });
+  },
+
+  updateChecklist: (checklistId: string, data: { title?: string; isCompleted?: boolean }): Promise<ChecklistItem> => {
+    return axiosClient.patch(`/tasks/checklists/${checklistId}`, data);
+  },
+
+  deleteChecklist: (checklistId: string) => {
+    return axiosClient.delete(`/tasks/checklists/${checklistId}`);
   },
 };

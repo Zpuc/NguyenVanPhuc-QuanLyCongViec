@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CommentsService } from './comments.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @ApiTags('comments')
 @ApiBearerAuth()
@@ -19,6 +20,16 @@ export class CommentsController {
         @Body() dto: CreateCommentDto,
     ) {
         return this.commentsService.create(taskId, req.user.id, dto);
+    }
+
+    @Patch('comments/:id')
+    @ApiOperation({ summary: 'Chỉnh sửa bình luận của chính mình' })
+    update(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @Body() dto: UpdateCommentDto,
+    ) {
+        return this.commentsService.update(id, req.user.id, dto);
     }
 
     @Delete('comments/:id')

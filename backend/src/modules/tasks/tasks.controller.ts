@@ -22,6 +22,8 @@ import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { CreateChecklistDto } from './dto/create-checklist.dto';
+import { UpdateChecklistDto } from './dto/update-checklist.dto';
 
 @ApiTags('Tasks Quản lý công việc và Kanban')
 @ApiBearerAuth()
@@ -34,6 +36,12 @@ export class TasksController {
     @ApiOperation({ summary: 'Tạo công việc mới (Tự động đánh số taskNumber và xếp cuối cột)' })
     create(@Req() req: any, @Body() dto: CreateTaskDto) {
         return this.tasksService.create(req.user.id, dto);
+    }
+
+    @Get('my-tasks')
+    @ApiOperation({ summary: 'Lấy danh sách tất cả công việc được giao cho người dùng hiện tại' })
+    getMyTasks(@Req() req: any) {
+        return this.tasksService.getMyTasks(req.user.id);
     }
 
     @Get(':id')
@@ -98,6 +106,35 @@ export class TasksController {
         @Req() req: any,
     ) {
         return this.tasksService.removeAttachment(attachmentId, req.user.id);
+    }
+
+    @Post(':id/checklists')
+    @ApiOperation({ summary: 'Thêm mục công việc con (Checklist)' })
+    createChecklist(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @Body() dto: CreateChecklistDto,
+    ) {
+        return this.tasksService.createChecklist(id, req.user.id, dto);
+    }
+
+    @Patch('checklists/:checklistId')
+    @ApiOperation({ summary: 'Cập nhật mục công việc con (Đổi tên hoặc tick hoàn thành)' })
+    updateChecklist(
+        @Param('checklistId', ParseUUIDPipe) checklistId: string,
+        @Req() req: any,
+        @Body() dto: UpdateChecklistDto,
+    ) {
+        return this.tasksService.updateChecklist(checklistId, req.user.id, dto);
+    }
+
+    @Delete('checklists/:checklistId')
+    @ApiOperation({ summary: 'Xóa mục công việc con' })
+    removeChecklist(
+        @Param('checklistId', ParseUUIDPipe) checklistId: string,
+        @Req() req: any,
+    ) {
+        return this.tasksService.removeChecklist(checklistId, req.user.id);
     }
 
     @Delete(':id')

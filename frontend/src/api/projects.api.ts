@@ -36,6 +36,10 @@ export interface TaskItem {
     comments: number;
     attachments: number;
   };
+  checklists?: {
+    id: string;
+    isCompleted: boolean;
+  }[];
 }
 
 export interface ColumnItem {
