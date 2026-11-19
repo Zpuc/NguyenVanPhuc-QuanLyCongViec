@@ -88,6 +88,17 @@ export interface TaskDetail {
   comments: CommentItem[];
   attachments: AttachmentItem[];
   activityLogs?: ActivityLogItem[];
+  checklists?: ChecklistItem[];
+}
+
+export interface ChecklistItem {
+  id: string;
+  taskId: string;
+  title: string;
+  isCompleted: boolean;
+  positionOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MyTaskItem {
@@ -168,5 +179,17 @@ export const tasksApi = {
 
   deleteAttachment: (attachmentId: string) => {
     return axiosClient.delete(`/tasks/attachments/${attachmentId}`);
+  },
+
+  createChecklist: (taskId: string, title: string): Promise<ChecklistItem> => {
+    return axiosClient.post(`/tasks/${taskId}/checklists`, { title });
+  },
+
+  updateChecklist: (checklistId: string, data: { title?: string; isCompleted?: boolean }): Promise<ChecklistItem> => {
+    return axiosClient.patch(`/tasks/checklists/${checklistId}`, data);
+  },
+
+  deleteChecklist: (checklistId: string) => {
+    return axiosClient.delete(`/tasks/checklists/${checklistId}`);
   },
 };

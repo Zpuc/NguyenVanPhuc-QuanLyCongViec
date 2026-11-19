@@ -108,6 +108,9 @@ export class ProjectsService {
                                 _count: {
                                     select: { comments: true, attachments: true },
                                 },
+                                checklists: {
+                                    select: { id: true, isCompleted: true },
+                                },
                             },
                         },
                     },

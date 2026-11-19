@@ -28,6 +28,8 @@ import {
   Empty,
   Table,
   Segmented,
+  Checkbox,
+  Progress,
 } from 'antd';
 import type { MenuProps, TableColumnsType } from 'antd';
 import {
@@ -52,6 +54,7 @@ import {
   AppstoreOutlined,
   TableOutlined,
   EyeOutlined,
+  CheckSquareOutlined,
 } from '@ant-design/icons';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
@@ -127,6 +130,8 @@ export const KanbanBoardPage: React.FC = () => {
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [savingTask, setSavingTask] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const [addingChecklist, setAddingChecklist] = useState(false);
 
   const [isMembersDrawerOpen, setIsMembersDrawerOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -291,6 +296,7 @@ export const KanbanBoardPage: React.FC = () => {
     setEditingDescription(false);
     setEditingCommentId(null);
     setEditingCommentText('');
+    setNewChecklistTitle('');
   };
 
   const handleStartEditComment = (commentId: string, currentContent: string) => {
@@ -403,6 +409,54 @@ export const KanbanBoardPage: React.FC = () => {
       fetchProjectDetail();
     } catch (err: any) {
       message.error(err.message || 'Xóa tệp đính kèm thất bại');
+    }
+  };
+
+  const handleCreateChecklist = async () => {
+    if (!taskDetail || !newChecklistTitle.trim()) return;
+    try {
+      setAddingChecklist(true);
+      const created = await tasksApi.createChecklist(taskDetail.id, newChecklistTitle.trim());
+      setTaskDetail({
+        ...taskDetail,
+        checklists: [...(taskDetail.checklists || []), created],
+      });
+      setNewChecklistTitle('');
+      message.success('Đã thêm việc cần làm');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể thêm việc cần làm');
+    } finally {
+      setAddingChecklist(false);
+    }
+  };
+
+  const handleToggleChecklist = async (checklistId: string, isCompleted: boolean) => {
+    if (!taskDetail) return;
+    try {
+      const updated = await tasksApi.updateChecklist(checklistId, { isCompleted });
+      setTaskDetail({
+        ...taskDetail,
+        checklists: (taskDetail.checklists || []).map((c) => (c.id === checklistId ? updated : c)),
+      });
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể cập nhật việc cần làm');
+    }
+  };
+
+  const handleDeleteChecklist = async (checklistId: string) => {
+    if (!taskDetail) return;
+    try {
+      await tasksApi.deleteChecklist(checklistId);
+      setTaskDetail({
+        ...taskDetail,
+        checklists: (taskDetail.checklists || []).filter((c) => c.id !== checklistId),
+      });
+      message.success('Đã xóa việc cần làm');
+      fetchProjectDetail();
+    } catch (err: any) {
+      message.error(err.message || 'Không thể xóa việc cần làm');
     }
   };
 
@@ -734,19 +788,29 @@ export const KanbanBoardPage: React.FC = () => {
       {
         title: 'Tương tác',
         key: 'interactions',
-        width: 100,
-        render: (_, record: TableTaskRow) => (
-          <Space size={12} style={{ color: '#64748b', fontSize: 12 }}>
-            <Space size={4}>
-              <CommentOutlined />
-              <span>{record._count?.comments || 0}</span>
+        width: 130,
+        render: (_, record: TableTaskRow) => {
+          const totalSub = record.checklists?.length || 0;
+          const doneSub = record.checklists?.filter((c) => c.isCompleted).length || 0;
+          return (
+            <Space size={10} style={{ color: '#64748b', fontSize: 12 }}>
+              {totalSub > 0 && (
+                <Space size={4} style={{ color: doneSub === totalSub ? '#10b981' : '#4f46e5', fontWeight: 500 }}>
+                  <CheckSquareOutlined />
+                  <span>{doneSub}/{totalSub}</span>
+                </Space>
+              )}
+              <Space size={4}>
+                <CommentOutlined />
+                <span>{record._count?.comments || 0}</span>
+              </Space>
+              <Space size={4}>
+                <PaperClipOutlined />
+                <span>{record._count?.attachments || 0}</span>
+              </Space>
             </Space>
-            <Space size={4}>
-              <PaperClipOutlined />
-              <span>{record._count?.attachments || 0}</span>
-            </Space>
-          </Space>
-        ),
+          );
+        },
       },
       {
         title: '',
@@ -1087,6 +1151,25 @@ export const KanbanBoardPage: React.FC = () => {
                                     </Tag>
                                   </div>
                                 )}
+
+                                {task.checklists && task.checklists.length > 0 && (() => {
+                                  const total = task.checklists.length;
+                                  const completed = task.checklists.filter((c) => c.isCompleted).length;
+                                  const percent = Math.round((completed / total) * 100);
+                                  const allDone = completed === total;
+                                  return (
+                                    <div style={{ marginBottom: 8 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 2 }}>
+                                        <Space size={4} style={{ color: allDone ? '#10b981' : '#64748b' }}>
+                                          <CheckSquareOutlined />
+                                          <span>{completed}/{total} việc con</span>
+                                        </Space>
+                                        <Text type="secondary" style={{ fontSize: 10 }}>{percent}%</Text>
+                                      </div>
+                                      <Progress percent={percent} size="small" showInfo={false} strokeColor={allDone ? '#10b981' : '#4f46e5'} style={{ margin: 0 }} />
+                                    </div>
+                                  );
+                                })()}
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <Tag color={priorityColors[task.priority]} style={{ margin: 0 }}>
@@ -1448,6 +1531,106 @@ export const KanbanBoardPage: React.FC = () => {
                     <Text type="secondary">Chưa có mô tả chi tiết</Text>
                   )}
                 </div>
+              )}
+            </div>
+
+            <Divider style={{ margin: '4px 0' }} />
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Space size={8}>
+                  <CheckSquareOutlined style={{ color: '#4f46e5' }} />
+                  <Title level={5} style={{ margin: 0 }}>
+                    Việc cần làm ({taskDetail.checklists?.filter((c) => c.isCompleted).length || 0}/
+                    {taskDetail.checklists?.length || 0})
+                  </Title>
+                </Space>
+              </div>
+
+              {taskDetail.checklists && taskDetail.checklists.length > 0 && (() => {
+                const total = taskDetail.checklists.length;
+                const completed = taskDetail.checklists.filter((c) => c.isCompleted).length;
+                const percent = Math.round((completed / total) * 100);
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <Progress
+                      percent={percent}
+                      status={percent === 100 ? 'success' : 'active'}
+                      strokeColor={percent === 100 ? '#10b981' : '#4f46e5'}
+                    />
+                  </div>
+                );
+              })()}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                {taskDetail.checklists?.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: item.isCompleted ? '#f8fafc' : '#ffffff',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Checkbox
+                      checked={item.isCompleted}
+                      disabled={!canEditTask}
+                      onChange={(e) => handleToggleChecklist(item.id, e.target.checked)}
+                      style={{ flex: 1 }}
+                    >
+                      <span
+                        style={{
+                          textDecoration: item.isCompleted ? 'line-through' : 'none',
+                          color: item.isCompleted ? '#94a3b8' : '#1e293b',
+                          fontSize: 14,
+                        }}
+                      >
+                        {item.title}
+                      </span>
+                    </Checkbox>
+
+                    {canEditTask && (
+                      <Popconfirm
+                        title="Xóa việc con này?"
+                        onConfirm={() => handleDeleteChecklist(item.id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                      >
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                        />
+                      </Popconfirm>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {canEditTask && (
+                <Space.Compact style={{ width: '100%' }}>
+                  <Input
+                    placeholder="Thêm việc cần làm (nhấn Enter để thêm)..."
+                    value={newChecklistTitle}
+                    onChange={(e) => setNewChecklistTitle(e.target.value)}
+                    onPressEnter={handleCreateChecklist}
+                    disabled={addingChecklist}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleCreateChecklist}
+                    loading={addingChecklist}
+                    disabled={!newChecklistTitle.trim()}
+                  >
+                    Thêm
+                  </Button>
+                </Space.Compact>
               )}
             </div>
 
