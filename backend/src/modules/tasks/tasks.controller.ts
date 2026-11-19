@@ -1,11 +1,29 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    Req,
+    UploadedFile,
+    UseGuards,
+    UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { existsSync, mkdirSync } from 'fs';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
-
+import { CreateChecklistDto } from './dto/create-checklist.dto';
+import { UpdateChecklistDto } from './dto/update-checklist.dto';
 
 @ApiTags('Tasks Quản lý công việc và Kanban')
 @ApiBearerAuth()
@@ -19,11 +37,19 @@ export class TasksController {
     create(@Req() req: any, @Body() dto: CreateTaskDto) {
         return this.tasksService.create(req.user.id, dto);
     }
+
+    @Get('my-tasks')
+    @ApiOperation({ summary: 'Lấy danh sách tất cả công việc được giao cho người dùng hiện tại' })
+    getMyTasks(@Req() req: any) {
+        return this.tasksService.getMyTasks(req.user.id);
+    }
+
     @Get(':id')
     @ApiOperation({ summary: 'Xem chi tiết công việc (Kèm bình luận, tệp đính kèm)' })
     findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
         return this.tasksService.findOne(id, req.user.id);
     }
+
     @Patch(':id/move')
     @ApiOperation({ summary: 'Kéo thả công việc trên bảng Kanban (Cập nhật Cột & Vị trí)' })
     moveTask(
@@ -33,8 +59,9 @@ export class TasksController {
     ) {
         return this.tasksService.moveTask(id, req.user.id, dto);
     }
+
     @Patch(':id')
-    @ApiOperation({ summary: 'Cập nhật thông tin công việc (Tiêu đề, Người làm, Hạn chót...)' })
+    @ApiOperation({ summary: 'Cập nhật thông tin công việc (Tiêu đề, Mô tả, Ưu tiên, Người làm, Hạn chót)' })
     update(
         @Param('id', ParseUUIDPipe) id: string,
         @Req() req: any,
@@ -42,18 +69,77 @@ export class TasksController {
     ) {
         return this.tasksService.update(id, req.user.id, dto);
     }
+
+    @Post(':id/attachments')
+    @ApiOperation({ summary: 'Tải lên tệp đính kèm cho công việc' })
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(
+        FileInterceptor('file', {
+            storage: diskStorage({
+                destination: (_req, _file, cb) => {
+                    const uploadPath = join(process.cwd(), 'uploads');
+                    if (!existsSync(uploadPath)) {
+                        mkdirSync(uploadPath, { recursive: true });
+                    }
+                    cb(null, uploadPath);
+                },
+                filename: (_req, file, cb) => {
+                    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+                    cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+                },
+            }),
+            limits: { fileSize: 10 * 1024 * 1024 },
+        }),
+    )
+    uploadAttachment(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        return this.tasksService.uploadAttachment(id, req.user.id, file);
+    }
+
+    @Delete('attachments/:attachmentId')
+    @ApiOperation({ summary: 'Xóa tệp đính kèm' })
+    removeAttachment(
+        @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+        @Req() req: any,
+    ) {
+        return this.tasksService.removeAttachment(attachmentId, req.user.id);
+    }
+
+    @Post(':id/checklists')
+    @ApiOperation({ summary: 'Thêm mục công việc con (Checklist)' })
+    createChecklist(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Req() req: any,
+        @Body() dto: CreateChecklistDto,
+    ) {
+        return this.tasksService.createChecklist(id, req.user.id, dto);
+    }
+
+    @Patch('checklists/:checklistId')
+    @ApiOperation({ summary: 'Cập nhật mục công việc con (Đổi tên hoặc tick hoàn thành)' })
+    updateChecklist(
+        @Param('checklistId', ParseUUIDPipe) checklistId: string,
+        @Req() req: any,
+        @Body() dto: UpdateChecklistDto,
+    ) {
+        return this.tasksService.updateChecklist(checklistId, req.user.id, dto);
+    }
+
+    @Delete('checklists/:checklistId')
+    @ApiOperation({ summary: 'Xóa mục công việc con' })
+    removeChecklist(
+        @Param('checklistId', ParseUUIDPipe) checklistId: string,
+        @Req() req: any,
+    ) {
+        return this.tasksService.removeChecklist(checklistId, req.user.id);
+    }
+
     @Delete(':id')
     @ApiOperation({ summary: 'Xóa công việc' })
     remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
         return this.tasksService.remove(id, req.user.id);
     }
 }
-
-
-
-
-
-
-
-
-

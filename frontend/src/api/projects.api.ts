@@ -25,6 +25,7 @@ export interface TaskItem {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate?: string;
   positionOrder: number;
+  reporterId?: string;
   assignee?: {
     id: string;
     fullName: string;
@@ -35,6 +36,10 @@ export interface TaskItem {
     comments: number;
     attachments: number;
   };
+  checklists?: {
+    id: string;
+    isCompleted: boolean;
+  }[];
 }
 
 export interface ColumnItem {
@@ -76,9 +81,25 @@ export interface CreateProjectDto {
   description?: string;
 }
 
+export interface UpdateProjectDto {
+  name?: string;
+  description?: string;
+}
+
 export interface AddMemberDto {
   email: string;
   role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
+export interface CreateColumnDto {
+  title: string;
+  color?: string;
+}
+
+export interface UpdateColumnDto {
+  title?: string;
+  color?: string;
+  positionOrder?: number;
 }
 
 export const projectsApi = {
@@ -94,6 +115,14 @@ export const projectsApi = {
     return axiosClient.post('/projects', data);
   },
 
+  updateProject: (id: string, data: UpdateProjectDto): Promise<ProjectItem> => {
+    return axiosClient.patch(`/projects/${id}`, data);
+  },
+
+  deleteProject: (id: string) => {
+    return axiosClient.delete(`/projects/${id}`);
+  },
+
   addMember: (projectId: string, data: AddMemberDto) => {
     return axiosClient.post(`/projects/${projectId}/members`, data);
   },
@@ -104,5 +133,17 @@ export const projectsApi = {
 
   removeMember: (projectId: string, userId: string) => {
     return axiosClient.delete(`/projects/${projectId}/members/${userId}`);
+  },
+
+  createColumn: (projectId: string, data: CreateColumnDto): Promise<ColumnItem> => {
+    return axiosClient.post(`/projects/${projectId}/columns`, data);
+  },
+
+  updateColumn: (projectId: string, columnId: string, data: UpdateColumnDto): Promise<ColumnItem> => {
+    return axiosClient.patch(`/projects/${projectId}/columns/${columnId}`, data);
+  },
+
+  deleteColumn: (projectId: string, columnId: string) => {
+    return axiosClient.delete(`/projects/${projectId}/columns/${columnId}`);
   },
 };

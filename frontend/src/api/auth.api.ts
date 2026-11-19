@@ -19,13 +19,29 @@ export interface RegisterDto {
     fullName: string;
 }
 
+export interface UpdateProfileDto {
+    fullName: string;
+}
+
+export interface ChangePasswordDto {
+    currentPassword: string;
+    newPassword: string;
+}
+
 export interface AuthResponse {
     user: User;
     accessToken: string;
 }
 
-export const authApi = {
+export const formatAvatarUrl = (url?: string | null): string | undefined => {
+    if (!url) return undefined;
+    if (url.startsWith('/uploads/')) {
+        return `http://localhost:3000${url}`;
+    }
+    return url;
+};
 
+export const authApi = {
     login: (data: LoginDto): Promise<AuthResponse> => {
         return axiosClient.post('/auth/login', data);
     },
@@ -36,5 +52,23 @@ export const authApi = {
 
     getProfile: (): Promise<User> => {
         return axiosClient.get('/auth/me');
+    },
+
+    updateProfile: (data: UpdateProfileDto): Promise<User> => {
+        return axiosClient.patch('/auth/profile', data);
+    },
+
+    uploadAvatar: (file: File): Promise<User> => {
+        const formData = new FormData();
+        formData.append('avatar', file);
+        return axiosClient.patch('/auth/profile/avatar', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+    },
+
+    changePassword: (data: ChangePasswordDto): Promise<{ message: string }> => {
+        return axiosClient.patch('/auth/change-password', data);
     },
 };

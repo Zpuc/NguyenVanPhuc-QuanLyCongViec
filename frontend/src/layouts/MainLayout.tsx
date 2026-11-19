@@ -1,7 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, Button, theme, Badge, Popover, List, Spin, Empty } from 'antd';
+import {
+  Layout,
+  Menu,
+  Avatar,
+  Dropdown,
+  Space,
+  Typography,
+  Button,
+  theme,
+  Badge,
+  Popover,
+  List,
+  Spin,
+  Empty,
+  Modal,
+  Input,
+  Tag,
+  notification,
+} from 'antd';
 import type { MenuProps } from 'antd';
+import { io } from 'socket.io-client';
 import {
   AppstoreOutlined,
   ProjectOutlined,
@@ -12,28 +31,101 @@ import {
   MenuUnfoldOutlined,
   CheckCircleFilled,
   BellOutlined,
+  CheckSquareOutlined,
+  SearchOutlined,
+  ArrowRightOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../store/useAuthStore';
+import { formatAvatarUrl } from '../api/auth.api';
 import { notificationsApi } from '../api/notifications.api';
 import type { NotificationItem } from '../api/notifications.api';
+import { searchApi } from '../api/search.api';
+import type { SearchResponse } from '../api/search.api';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
 export const MainLayout: React.FC = () => {
     const [collapsed, setCollapsed] = useState(false);
+    const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [unreadCount, setUnreadCount] = useState<number>(0);
     const [loadingNotifications, setLoadingNotifications] = useState<boolean>(false);
     const [popoverOpen, setPopoverOpen] = useState<boolean>(false);
+    const [searchModalOpen, setSearchModalOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [searchResults, setSearchResults] = useState<SearchResponse>({ projects: [], tasks: [] });
 
-    const { user, isAuthenticated, logout } = useAuthStore();
+    const { user, token, isAuthenticated, logout } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
     const {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setSearchModalOpen((prev) => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    useEffect(() => {
+        if (!searchModalOpen) {
+            setSearchQuery('');
+            setSearchResults({ projects: [], tasks: [] });
+            return;
+        }
+    }, [searchModalOpen]);
+
+    useEffect(() => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) {
+            setSearchResults({ projects: [], tasks: [] });
+            setSearchLoading(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            try {
+                setSearchLoading(true);
+                const res = await searchApi.search(trimmed);
+                setSearchResults(res);
+            } catch {
+            } finally {
+                setSearchLoading(false);
+            }
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const handleSelectProject = (projectId: string) => {
+        setSearchModalOpen(false);
+        navigate(`/projects/${projectId}`);
+    };
+
+    const handleSelectTask = (projectId: string) => {
+        setSearchModalOpen(false);
+        navigate(`/projects/${projectId}`);
+    };
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 768;
+            setIsMobile(mobile);
+            if (mobile) setCollapsed(true);
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const fetchUnreadCount = async () => {
         try {
@@ -55,11 +147,45 @@ export const MainLayout: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated || !token) return;
+
         fetchUnreadCount();
-        const interval = setInterval(fetchUnreadCount, 15000);
-        return () => clearInterval(interval);
-    }, [isAuthenticated]);
+
+        const socket = io('http://localhost:3000', {
+            auth: { token },
+            transports: ['websocket', 'polling'],
+        });
+
+        socket.on('connect', () => {
+            fetchUnreadCount();
+        });
+
+        socket.on('notification:new', (incoming: NotificationItem) => {
+            setUnreadCount((prev) => prev + 1);
+            setNotifications((prev) => {
+                if (prev.some((n) => n.id === incoming.id)) {
+                    return prev;
+                }
+                return [incoming, ...prev].slice(0, 20);
+            });
+
+            notification.info({
+                message: incoming.title,
+                description: incoming.content,
+                placement: 'topRight',
+                duration: 4,
+                onClick: () => {
+                    if (incoming.metadata?.projectId) {
+                        navigate(`/projects/${incoming.metadata.projectId}`);
+                    }
+                },
+            });
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [isAuthenticated, token]);
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
@@ -111,6 +237,12 @@ export const MainLayout: React.FC = () => {
             onClick: () => navigate('/dashboard'),
         },
         {
+            key: '/my-tasks',
+            icon: <CheckSquareOutlined />,
+            label: 'Việc của tôi',
+            onClick: () => navigate('/my-tasks'),
+        },
+        {
             key: '/projects',
             icon: <ProjectOutlined />,
             label: 'Dự án của tôi',
@@ -126,6 +258,15 @@ export const MainLayout: React.FC = () => {
 
     const userMenuItems: MenuProps['items'] = [
         {
+            key: 'profile',
+            icon: <UserOutlined />,
+            label: 'Hồ sơ cá nhân',
+            onClick: () => navigate('/profile'),
+        },
+        {
+            type: 'divider',
+        },
+        {
             key: 'logout',
             icon: <LogoutOutlined />,
             label: 'Đăng xuất',
@@ -135,7 +276,7 @@ export const MainLayout: React.FC = () => {
     ];
 
     const notificationContent = (
-        <div style={{ width: 360, maxHeight: 420, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: isMobile ? 'min(330px, 92vw)' : 360, maxHeight: 420, display: 'flex', flexDirection: 'column' }}>
             <div
                 style={{
                     display: 'flex',
@@ -208,14 +349,35 @@ export const MainLayout: React.FC = () => {
     );
 
     return (
-        <Layout style={{ minHeight: '100vh' }}>
+        <Layout style={{ minHeight: '100vh', position: 'relative' }}>
+            {isMobile && !collapsed && (
+                <div
+                    onClick={() => setCollapsed(true)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0, 0, 0, 0.45)',
+                        zIndex: 999,
+                    }}
+                />
+            )}
+
             <Sider
                 trigger={null}
                 collapsible
                 collapsed={collapsed}
+                collapsedWidth={isMobile ? 0 : 80}
                 theme="light"
                 style={{
                     borderRight: '1px solid #e2e8f0',
+                    position: isMobile && !collapsed ? 'fixed' : 'relative',
+                    zIndex: isMobile && !collapsed ? 1000 : 'auto',
+                    height: isMobile && !collapsed ? '100vh' : 'auto',
+                    top: 0,
+                    left: 0,
                 }}
             >
                 <div
@@ -244,10 +406,10 @@ export const MainLayout: React.FC = () => {
                 />
             </Sider>
 
-            <Layout>
+            <Layout style={{ minWidth: 0 }}>
                 <Header
                     style={{
-                        padding: '0 24px',
+                        padding: isMobile ? '0 12px' : '0 24px',
                         background: colorBgContainer,
                         display: 'flex',
                         alignItems: 'center',
@@ -255,14 +417,55 @@ export const MainLayout: React.FC = () => {
                         borderBottom: '1px solid #e2e8f0',
                     }}
                 >
-                    <Button
-                        type="text"
-                        icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                        onClick={() => setCollapsed(!collapsed)}
-                        style={{ fontSize: 16, width: 44, height: 44 }}
-                    />
+                    <Space size={12} align="center">
+                        <Button
+                            type="text"
+                            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                            onClick={() => setCollapsed(!collapsed)}
+                            style={{ fontSize: 16, width: 44, height: 44 }}
+                        />
 
-                    <Space size={20}>
+                        <div
+                            onClick={() => setSearchModalOpen(true)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: isMobile ? '6px 10px' : '6px 14px',
+                                cursor: 'pointer',
+                                width: isMobile ? 140 : 250,
+                                transition: 'all 0.2s ease',
+                            }}
+                        >
+                            <Space size={8} style={{ color: '#94a3b8' }}>
+                                <SearchOutlined style={{ fontSize: 14 }} />
+                                <span style={{ fontSize: 13, userSelect: 'none' }}>
+                                    {isMobile ? 'Tìm...' : 'Tìm kiếm nhanh...'}
+                                </span>
+                            </Space>
+                            {!isMobile && (
+                                <span
+                                    style={{
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        color: '#64748b',
+                                        background: '#ffffff',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 4,
+                                        padding: '1px 5px',
+                                        lineHeight: 1.2,
+                                    }}
+                                >
+                                    Ctrl K
+                                </span>
+                            )}
+                        </div>
+                    </Space>
+
+                    <Space size={isMobile ? 10 : 20}>
                         <Popover
                             content={notificationContent}
                             trigger="click"
@@ -285,9 +488,9 @@ export const MainLayout: React.FC = () => {
                                 <Avatar
                                     style={{ backgroundColor: '#4f46e5' }}
                                     icon={<UserOutlined />}
-                                    src={user?.avatarUrl}
+                                    src={formatAvatarUrl(user?.avatarUrl)}
                                 />
-                                <Text strong>{user?.fullName || 'Người dùng'}</Text>
+                                {!isMobile && <Text strong>{user?.fullName || 'Người dùng'}</Text>}
                             </Space>
                         </Dropdown>
                     </Space>
@@ -295,8 +498,8 @@ export const MainLayout: React.FC = () => {
 
                 <Content
                     style={{
-                        margin: 24,
-                        padding: 24,
+                        margin: isMobile ? 10 : 24,
+                        padding: isMobile ? 12 : 24,
                         background: colorBgContainer,
                         borderRadius: borderRadiusLG,
                         minHeight: 280,
@@ -305,6 +508,210 @@ export const MainLayout: React.FC = () => {
                     <Outlet />
                 </Content>
             </Layout>
+
+            <Modal
+                open={searchModalOpen}
+                onCancel={() => setSearchModalOpen(false)}
+                footer={null}
+                closable={false}
+                width={isMobile ? '92vw' : 620}
+                style={{ top: 70 }}
+                styles={{
+                    body: { padding: 0 },
+                }}
+            >
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', background: '#ffffff' }}>
+                    <Input
+                        autoFocus
+                        size="large"
+                        variant="borderless"
+                        prefix={<SearchOutlined style={{ fontSize: 18, color: '#6366f1', marginRight: 8 }} />}
+                        placeholder="Tìm kiếm dự án, công việc theo tên hoặc mã..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        allowClear
+                        style={{ padding: 0, fontSize: 15 }}
+                    />
+                </div>
+
+                <div style={{ maxHeight: 420, overflowY: 'auto', padding: '12px 16px' }}>
+                    {searchLoading ? (
+                        <div style={{ textAlign: 'center', padding: '36px 0' }}>
+                            <Spin />
+                        </div>
+                    ) : !searchQuery.trim() ? (
+                        <div style={{ padding: '32px 12px', textAlign: 'center', color: '#94a3b8' }}>
+                            <SearchOutlined style={{ fontSize: 28, marginBottom: 10, display: 'block', color: '#cbd5e1' }} />
+                            <Text type="secondary" style={{ fontSize: 13 }}>
+                                Nhập từ khóa để tìm kiếm nhanh dự án hoặc công việc
+                            </Text>
+                        </div>
+                    ) : searchResults.projects.length === 0 && searchResults.tasks.length === 0 ? (
+                        <Empty
+                            description="Không tìm thấy dự án hoặc công việc nào phù hợp"
+                            style={{ padding: '24px 0' }}
+                        />
+                    ) : (
+                        <div>
+                            {searchResults.projects.length > 0 && (
+                                <div style={{ marginBottom: 14 }}>
+                                    <Text
+                                        type="secondary"
+                                        style={{
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.5,
+                                            display: 'block',
+                                            marginBottom: 6,
+                                            paddingLeft: 4,
+                                        }}
+                                    >
+                                        Dự án ({searchResults.projects.length})
+                                    </Text>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        {searchResults.projects.map((p) => (
+                                            <div
+                                                key={p.id}
+                                                onClick={() => handleSelectProject(p.id)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '9px 12px',
+                                                    borderRadius: 8,
+                                                    cursor: 'pointer',
+                                                    background: '#ffffff',
+                                                    border: '1px solid #f1f5f9',
+                                                    transition: 'all 0.15s ease',
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                                            >
+                                                <Space size={10} style={{ minWidth: 0, flex: 1 }}>
+                                                    <ProjectOutlined style={{ fontSize: 16, color: '#6366f1' }} />
+                                                    <Tag color="purple" style={{ margin: 0, fontWeight: 600 }}>
+                                                        {p.key}
+                                                    </Tag>
+                                                    <Text strong style={{ fontSize: 14 }}>
+                                                        {p.name}
+                                                    </Text>
+                                                    {p.description && (
+                                                        <Text
+                                                            type="secondary"
+                                                            ellipsis
+                                                            style={{ fontSize: 12, maxWidth: 200 }}
+                                                        >
+                                                            {p.description}
+                                                        </Text>
+                                                    )}
+                                                </Space>
+                                                <ArrowRightOutlined style={{ fontSize: 12, color: '#94a3b8' }} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {searchResults.tasks.length > 0 && (
+                                <div>
+                                    <Text
+                                        type="secondary"
+                                        style={{
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.5,
+                                            display: 'block',
+                                            marginBottom: 6,
+                                            paddingLeft: 4,
+                                        }}
+                                    >
+                                        Công việc ({searchResults.tasks.length})
+                                    </Text>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        {searchResults.tasks.map((t) => (
+                                            <div
+                                                key={t.id}
+                                                onClick={() => handleSelectTask(t.project.id)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '9px 12px',
+                                                    borderRadius: 8,
+                                                    cursor: 'pointer',
+                                                    background: '#ffffff',
+                                                    border: '1px solid #f1f5f9',
+                                                    transition: 'all 0.15s ease',
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                                            >
+                                                <Space size={8} wrap style={{ minWidth: 0, flex: 1 }}>
+                                                    <Tag color="cyan" style={{ margin: 0, fontWeight: 600 }}>
+                                                        {t.project.key}-{t.taskNumber}
+                                                    </Tag>
+                                                    <Text strong style={{ fontSize: 14, color: '#0f172a' }}>
+                                                        {t.title}
+                                                    </Text>
+                                                    <Tag
+                                                        style={{
+                                                            margin: 0,
+                                                            borderRadius: 4,
+                                                            fontSize: 11,
+                                                            background: '#f8fafc',
+                                                            borderColor: t.column.color || '#cbd5e1',
+                                                            color: t.column.color || '#475569',
+                                                        }}
+                                                    >
+                                                        {t.column.title}
+                                                    </Tag>
+                                                    <Text type="secondary" style={{ fontSize: 12 }}>
+                                                        <ProjectOutlined style={{ marginRight: 4 }} />
+                                                        {t.project.name}
+                                                    </Text>
+                                                </Space>
+                                                <ArrowRightOutlined style={{ fontSize: 12, color: '#94a3b8' }} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <div
+                    style={{
+                        padding: '8px 16px',
+                        background: '#f8fafc',
+                        borderTop: '1px solid #f1f5f9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: 12,
+                        color: '#94a3b8',
+                    }}
+                >
+                    <span>Bấm vào kết quả để chuyển thẳng đến dự án</span>
+                    <Space size={4}>
+                        <kbd
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: 3,
+                                padding: '1px 5px',
+                                fontSize: 11,
+                                color: '#64748b',
+                            }}
+                        >
+                            Esc
+                        </kbd>
+                        <span>để đóng</span>
+                    </Space>
+                </div>
+            </Modal>
         </Layout>
     );
 };

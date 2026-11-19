@@ -137,12 +137,28 @@ model Task {
   comments     TaskComment[]
   attachments  TaskAttachment[]
   activityLogs ActivityLog[]
+  checklists   TaskChecklist[]
 
   @@unique([projectId, taskNumber])
   @@index([projectId])
   @@index([columnId])
   @@index([assigneeId])
   @@map("tasks")
+}
+
+model TaskChecklist {
+  id            String   @id @default(uuid()) @db.Uuid
+  taskId        String   @map("task_id") @db.Uuid
+  title         String
+  isCompleted   Boolean  @default(false) @map("is_completed")
+  positionOrder Float    @default(0) @map("position_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_checklists")
 }
 
 // Bảng Bình luận trong Công việc

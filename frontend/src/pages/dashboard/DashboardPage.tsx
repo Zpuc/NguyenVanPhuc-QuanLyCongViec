@@ -238,6 +238,7 @@ export const DashboardPage: React.FC = () => {
             rowKey="id"
             dataSource={stats.myTasks}
             columns={columns}
+            scroll={{ x: 720 }}
             pagination={stats.myTasks.length > 5 ? { pageSize: 5 } : false}
             locale={{
               emptyText: <Empty description="Bạn chưa có công việc nào được giao" />,
