@@ -415,6 +415,8 @@ export const MainLayout: React.FC = () => {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         borderBottom: '1px solid #e2e8f0',
+                        height: 64,
+                        lineHeight: 'normal',
                     }}
                 >
                     <Space size={12} align="center">
@@ -434,13 +436,16 @@ export const MainLayout: React.FC = () => {
                                 background: '#f8fafc',
                                 border: '1px solid #e2e8f0',
                                 borderRadius: 8,
-                                padding: isMobile ? '6px 10px' : '6px 14px',
+                                padding: isMobile ? '0 10px' : '0 14px',
+                                height: 36,
+                                lineHeight: '36px',
                                 cursor: 'pointer',
                                 width: isMobile ? 140 : 250,
                                 transition: 'all 0.2s ease',
+                                boxSizing: 'border-box',
                             }}
                         >
-                            <Space size={8} style={{ color: '#94a3b8' }}>
+                            <Space size={8} style={{ color: '#94a3b8', lineHeight: 'normal' }}>
                                 <SearchOutlined style={{ fontSize: 14 }} />
                                 <span style={{ fontSize: 13, userSelect: 'none' }}>
                                     {isMobile ? 'Tìm...' : 'Tìm kiếm nhanh...'}
