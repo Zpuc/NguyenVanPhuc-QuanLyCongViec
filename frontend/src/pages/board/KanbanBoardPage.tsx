@@ -917,7 +917,7 @@ export const KanbanBoardPage: React.FC = () => {
           border: '1px solid #e2e8f0',
         }}
       >
-        <Space size={12} wrap align="center" style={{ width: '100%' }}>
+        <Space size={12} wrap align="center" style={isMobile ? { width: '100%' } : undefined}>
           <Input.Search
             placeholder="Tìm theo tên việc hoặc mã..."
             allowClear
@@ -963,9 +963,9 @@ export const KanbanBoardPage: React.FC = () => {
           )}
         </Space>
 
-        <Space size={12} wrap align="center" style={isMobile ? { width: '100%', justifyContent: 'space-between' } : undefined}>
+        <Space size={12} align="center" style={isMobile ? { width: '100%', justifyContent: 'space-between' } : undefined}>
           {isFiltered && (
-            <Tag color="blue" icon={<FilterOutlined />}>
+            <Tag color="blue" icon={<FilterOutlined />} style={{ margin: 0 }}>
               Đang lọc kết quả
             </Tag>
           )}
@@ -1128,10 +1128,22 @@ export const KanbanBoardPage: React.FC = () => {
                                   opacity: canDrag ? 1 : 0.88,
                                 }}
                               >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                  <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                  <Tag
+                                    bordered={false}
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      background: '#f1f5f9',
+                                      color: '#475569',
+                                      borderRadius: 4,
+                                      margin: 0,
+                                      padding: '1px 6px',
+                                      lineHeight: '18px',
+                                    }}
+                                  >
                                     {project.key}-{task.taskNumber}
-                                  </Text>
+                                  </Tag>
 
                                   <div onClick={(e) => e.stopPropagation()}>
                                     <Dropdown menu={{ items: taskMenuItems }} trigger={['click']}>
