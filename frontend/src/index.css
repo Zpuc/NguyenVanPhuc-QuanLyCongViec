@@ -11,5 +11,5 @@ body,
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  background-color: #f1f5f9;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
