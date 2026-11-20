@@ -17,6 +17,7 @@ import {
   Modal,
   Input,
   Tag,
+  Tooltip,
   notification,
 } from 'antd';
 import type { MenuProps } from 'antd';
@@ -34,9 +35,12 @@ import {
   CheckSquareOutlined,
   SearchOutlined,
   ArrowRightOutlined,
+  SunOutlined,
+  MoonOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../store/useAuthStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { formatAvatarUrl } from '../api/auth.api';
 import { notificationsApi } from '../api/notifications.api';
 import type { NotificationItem } from '../api/notifications.api';
@@ -47,6 +51,8 @@ const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
 export const MainLayout: React.FC = () => {
+    const { themeMode, toggleTheme } = useThemeStore();
+    const isDark = themeMode === 'dark';
     const [collapsed, setCollapsed] = useState(false);
     const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -319,14 +325,17 @@ export const MainLayout: React.FC = () => {
                                     borderRadius: 8,
                                     marginBottom: 6,
                                     cursor: 'pointer',
-                                    backgroundColor: item.isRead ? '#ffffff' : '#f0f5ff',
+                                    backgroundColor: item.isRead
+                                        ? isDark ? '#141414' : '#ffffff'
+                                        : isDark ? '#1e1b4b' : '#f0f5ff',
+                                    border: isDark ? '1px solid #303030' : '1px solid #f1f5f9',
                                     transition: 'background-color 0.2s',
                                 }}
                             >
                                 <List.Item.Meta
                                     title={
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontWeight: item.isRead ? 500 : 700, fontSize: 13, color: '#1e293b' }}>
+                                            <span style={{ fontWeight: item.isRead ? 500 : 700, fontSize: 13, color: isDark ? '#f1f5f9' : '#1e293b' }}>
                                                 {item.title}
                                             </span>
                                             <span style={{ fontSize: 11, color: '#94a3b8' }}>
@@ -335,7 +344,7 @@ export const MainLayout: React.FC = () => {
                                         </div>
                                     }
                                     description={
-                                        <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                                        <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#475569', marginTop: 2 }}>
                                             {item.content}
                                         </div>
                                     }
@@ -349,7 +358,7 @@ export const MainLayout: React.FC = () => {
     );
 
     return (
-        <Layout style={{ minHeight: '100vh', position: 'relative' }}>
+        <Layout style={{ minHeight: '100vh', position: 'relative', background: isDark ? '#09090b' : '#f1f5f9' }}>
             {isMobile && !collapsed && (
                 <div
                     onClick={() => setCollapsed(true)}
@@ -370,14 +379,15 @@ export const MainLayout: React.FC = () => {
                 collapsible
                 collapsed={collapsed}
                 collapsedWidth={isMobile ? 0 : 80}
-                theme="light"
+                theme={isDark ? 'dark' : 'light'}
                 style={{
-                    borderRight: '1px solid #e2e8f0',
+                    borderRight: isDark ? '1px solid #27272a' : '1px solid #e2e8f0',
                     position: isMobile && !collapsed ? 'fixed' : 'relative',
                     zIndex: isMobile && !collapsed ? 1000 : 'auto',
                     height: isMobile && !collapsed ? '100vh' : 'auto',
                     top: 0,
                     left: 0,
+                    background: isDark ? '#18181b' : colorBgContainer,
                 }}
             >
                 <div
@@ -387,10 +397,10 @@ export const MainLayout: React.FC = () => {
                         alignItems: 'center',
                         justifyContent: collapsed ? 'center' : 'flex-start',
                         padding: collapsed ? '0' : '0 20px',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
                         fontWeight: 700,
                         fontSize: 18,
-                        color: '#4f46e5',
+                        color: isDark ? '#818cf8' : '#4f46e5',
                         gap: 10,
                     }}
                 >
@@ -398,15 +408,15 @@ export const MainLayout: React.FC = () => {
                     {!collapsed && <span>TaskMaster</span>}
                 </div>
                 <Menu
-                    theme="light"
+                    theme={isDark ? 'dark' : 'light'}
                     mode="inline"
                     selectedKeys={[location.pathname]}
                     items={menuItems}
-                    style={{ borderRight: 0, marginTop: 12 }}
+                    style={{ borderRight: 0, marginTop: 12, background: isDark ? '#18181b' : colorBgContainer }}
                 />
             </Sider>
 
-            <Layout style={{ minWidth: 0 }}>
+            <Layout style={{ minWidth: 0, background: isDark ? '#09090b' : '#f1f5f9' }}>
                 <Header
                     style={{
                         padding: isMobile ? '0 12px' : '0 24px',
@@ -414,7 +424,9 @@ export const MainLayout: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        borderBottom: '1px solid #e2e8f0',
+                        borderBottom: isDark ? '1px solid #27272a' : '1px solid #e2e8f0',
+                        height: 64,
+                        lineHeight: 'normal',
                     }}
                 >
                     <Space size={12} align="center">
@@ -431,16 +443,19 @@ export const MainLayout: React.FC = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                background: '#f8fafc',
-                                border: '1px solid #e2e8f0',
+                                background: isDark ? '#27272a' : '#f8fafc',
+                                border: isDark ? '1px solid #3f3f46' : '1px solid #e2e8f0',
                                 borderRadius: 8,
-                                padding: isMobile ? '6px 10px' : '6px 14px',
+                                padding: isMobile ? '0 10px' : '0 14px',
+                                height: 36,
+                                lineHeight: '36px',
                                 cursor: 'pointer',
                                 width: isMobile ? 140 : 250,
                                 transition: 'all 0.2s ease',
+                                boxSizing: 'border-box',
                             }}
                         >
-                            <Space size={8} style={{ color: '#94a3b8' }}>
+                            <Space size={8} style={{ color: isDark ? '#a1a1aa' : '#94a3b8', lineHeight: 'normal' }}>
                                 <SearchOutlined style={{ fontSize: 14 }} />
                                 <span style={{ fontSize: 13, userSelect: 'none' }}>
                                     {isMobile ? 'Tìm...' : 'Tìm kiếm nhanh...'}
@@ -451,9 +466,9 @@ export const MainLayout: React.FC = () => {
                                     style={{
                                         fontSize: 11,
                                         fontWeight: 600,
-                                        color: '#64748b',
-                                        background: '#ffffff',
-                                        border: '1px solid #cbd5e1',
+                                        color: isDark ? '#a1a1aa' : '#64748b',
+                                        background: isDark ? '#18181b' : '#ffffff',
+                                        border: isDark ? '1px solid #3f3f46' : '1px solid #cbd5e1',
                                         borderRadius: 4,
                                         padding: '1px 5px',
                                         lineHeight: 1.2,
@@ -465,7 +480,23 @@ export const MainLayout: React.FC = () => {
                         </div>
                     </Space>
 
-                    <Space size={isMobile ? 10 : 20}>
+                    <Space size={isMobile ? 10 : 16} align="center">
+                        <Tooltip title={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}>
+                            <Button
+                                type="text"
+                                shape="circle"
+                                icon={
+                                    isDark ? (
+                                        <SunOutlined style={{ fontSize: 18, color: '#f59e0b' }} />
+                                    ) : (
+                                        <MoonOutlined style={{ fontSize: 18, color: '#475569' }} />
+                                    )
+                                }
+                                onClick={toggleTheme}
+                                style={{ width: 40, height: 40 }}
+                            />
+                        </Tooltip>
+
                         <Popover
                             content={notificationContent}
                             trigger="click"
@@ -477,7 +508,7 @@ export const MainLayout: React.FC = () => {
                                 <Button
                                     type="text"
                                     shape="circle"
-                                    icon={<BellOutlined style={{ fontSize: 18, color: '#475569' }} />}
+                                    icon={<BellOutlined style={{ fontSize: 18, color: isDark ? '#94a3b8' : '#475569' }} />}
                                     style={{ width: 40, height: 40 }}
                                 />
                             </Badge>
@@ -581,12 +612,12 @@ export const MainLayout: React.FC = () => {
                                                     padding: '9px 12px',
                                                     borderRadius: 8,
                                                     cursor: 'pointer',
-                                                    background: '#ffffff',
-                                                    border: '1px solid #f1f5f9',
+                                                    background: isDark ? '#18181b' : '#ffffff',
+                                                    border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
                                                     transition: 'all 0.15s ease',
                                                 }}
-                                                onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
-                                                onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                                                onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? '#27272a' : '#f8fafc')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.background = isDark ? '#18181b' : '#ffffff')}
                                             >
                                                 <Space size={10} style={{ minWidth: 0, flex: 1 }}>
                                                     <ProjectOutlined style={{ fontSize: 16, color: '#6366f1' }} />
@@ -641,18 +672,18 @@ export const MainLayout: React.FC = () => {
                                                     padding: '9px 12px',
                                                     borderRadius: 8,
                                                     cursor: 'pointer',
-                                                    background: '#ffffff',
-                                                    border: '1px solid #f1f5f9',
+                                                    background: isDark ? '#18181b' : '#ffffff',
+                                                    border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
                                                     transition: 'all 0.15s ease',
                                                 }}
-                                                onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
-                                                onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                                                onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? '#27272a' : '#f8fafc')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.background = isDark ? '#18181b' : '#ffffff')}
                                             >
                                                 <Space size={8} wrap style={{ minWidth: 0, flex: 1 }}>
                                                     <Tag color="cyan" style={{ margin: 0, fontWeight: 600 }}>
                                                         {t.project.key}-{t.taskNumber}
                                                     </Tag>
-                                                    <Text strong style={{ fontSize: 14, color: '#0f172a' }}>
+                                                    <Text strong style={{ fontSize: 14 }}>
                                                         {t.title}
                                                     </Text>
                                                     <Tag
@@ -660,7 +691,7 @@ export const MainLayout: React.FC = () => {
                                                             margin: 0,
                                                             borderRadius: 4,
                                                             fontSize: 11,
-                                                            background: '#f8fafc',
+                                                            background: isDark ? '#27272a' : '#f8fafc',
                                                             borderColor: t.column.color || '#cbd5e1',
                                                             color: t.column.color || '#475569',
                                                         }}
@@ -685,25 +716,25 @@ export const MainLayout: React.FC = () => {
                 <div
                     style={{
                         padding: '8px 16px',
-                        background: '#f8fafc',
-                        borderTop: '1px solid #f1f5f9',
+                        background: isDark ? '#18181b' : '#f8fafc',
+                        borderTop: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         fontSize: 12,
-                        color: '#94a3b8',
+                        color: isDark ? '#71717a' : '#94a3b8',
                     }}
                 >
                     <span>Bấm vào kết quả để chuyển thẳng đến dự án</span>
                     <Space size={4}>
                         <kbd
                             style={{
-                                background: '#ffffff',
-                                border: '1px solid #cbd5e1',
+                                background: isDark ? '#27272a' : '#ffffff',
+                                border: isDark ? '1px solid #3f3f46' : '1px solid #cbd5e1',
                                 borderRadius: 3,
                                 padding: '1px 5px',
                                 fontSize: 11,
-                                color: '#64748b',
+                                color: isDark ? '#a1a1aa' : '#64748b',
                             }}
                         >
                             Esc

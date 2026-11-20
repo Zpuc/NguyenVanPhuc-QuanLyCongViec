@@ -64,6 +64,7 @@ import { tasksApi } from '../../api/tasks.api';
 import type { TaskDetail, UpdateTaskDto, ActivityLogItem } from '../../api/tasks.api';
 import { formatAvatarUrl } from '../../api/auth.api';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useThemeStore } from '../../store/useThemeStore';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -109,6 +110,8 @@ export const KanbanBoardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
+  const { themeMode } = useThemeStore();
+  const isDark = themeMode === 'dark';
   const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
 
@@ -912,12 +915,12 @@ export const KanbanBoardPage: React.FC = () => {
           flexWrap: 'wrap',
           gap: 12,
           padding: '10px 16px',
-          background: '#ffffff',
+          background: isDark ? '#141414' : '#ffffff',
           borderRadius: 10,
-          border: '1px solid #e2e8f0',
+          border: isDark ? '1px solid #303030' : '1px solid #e2e8f0',
         }}
       >
-        <Space size={12} wrap align="center" style={{ width: '100%' }}>
+        <Space size={12} wrap align="center" style={isMobile ? { width: '100%' } : undefined}>
           <Input.Search
             placeholder="Tìm theo tên việc hoặc mã..."
             allowClear
@@ -963,9 +966,9 @@ export const KanbanBoardPage: React.FC = () => {
           )}
         </Space>
 
-        <Space size={12} wrap align="center" style={isMobile ? { width: '100%', justifyContent: 'space-between' } : undefined}>
+        <Space size={12} align="center" style={isMobile ? { width: '100%', justifyContent: 'space-between' } : undefined}>
           {isFiltered && (
-            <Tag color="blue" icon={<FilterOutlined />}>
+            <Tag color="blue" icon={<FilterOutlined />} style={{ margin: 0 }}>
               Đang lọc kết quả
             </Tag>
           )}
@@ -1017,9 +1020,9 @@ export const KanbanBoardPage: React.FC = () => {
                 style={{
                   flex: '1 0 230px',
                   minWidth: 230,
-                  background: '#f8fafc',
+                  background: isDark ? '#141414' : '#f8fafc',
                   borderRadius: 12,
-                  border: '1px solid #e2e8f0',
+                  border: isDark ? '1px solid #303030' : '1px solid #e2e8f0',
                   display: 'flex',
                   flexDirection: 'column',
                   maxHeight: 'calc(100vh - 270px)',
@@ -1032,8 +1035,8 @@ export const KanbanBoardPage: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: 8,
-                    borderBottom: '1px solid #e2e8f0',
-                    background: '#ffffff',
+                    borderBottom: isDark ? '1px solid #303030' : '1px solid #e2e8f0',
+                    background: isDark ? '#1f1f1f' : '#ffffff',
                     borderTopLeftRadius: 12,
                     borderTopRightRadius: 12,
                   }}
@@ -1086,7 +1089,7 @@ export const KanbanBoardPage: React.FC = () => {
                         gap: 10,
                         flex: 1,
                         minHeight: 60,
-                        background: snapshot.isDraggingOver ? '#f1f5f9' : 'transparent',
+                        background: snapshot.isDraggingOver ? (isDark ? '#262626' : '#f1f5f9') : 'transparent',
                         transition: 'background-color 0.2s ease',
                       }}
                     >
@@ -1122,16 +1125,29 @@ export const KanbanBoardPage: React.FC = () => {
                                 style={{
                                   borderRadius: 8,
                                   boxShadow: dragSnapshot.isDragging
-                                    ? '0 10px 15px -3px rgba(0, 0, 0, 0.2)'
+                                    ? '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
                                     : '0 1px 3px rgba(0,0,0,0.06)',
                                   cursor: canDrag ? 'grab' : 'pointer',
                                   opacity: canDrag ? 1 : 0.88,
+                                  border: isDark ? '1px solid #303030' : '1px solid #e2e8f0',
                                 }}
                               >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                  <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                  <Tag
+                                    bordered={false}
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      background: isDark ? '#262626' : '#f1f5f9',
+                                      color: isDark ? '#a1a1aa' : '#475569',
+                                      borderRadius: 4,
+                                      margin: 0,
+                                      padding: '1px 6px',
+                                      lineHeight: '18px',
+                                    }}
+                                  >
                                     {project.key}-{task.taskNumber}
-                                  </Text>
+                                  </Tag>
 
                                   <div onClick={(e) => e.stopPropagation()}>
                                     <Dropdown menu={{ items: taskMenuItems }} trigger={['click']}>
