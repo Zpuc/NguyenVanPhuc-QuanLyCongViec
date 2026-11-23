@@ -68,7 +68,7 @@ export class NotificationsGateway
 
   handleDisconnect(client: Socket) {
     if (client.data?.userId) {
-      client.leave(this.getUserRoom(client.data.userId));
+      void client.leave(this.getUserRoom(client.data.userId));
     }
   }
 

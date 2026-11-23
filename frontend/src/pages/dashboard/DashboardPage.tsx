@@ -11,6 +11,10 @@ import {
   Space,
   Spin,
   Empty,
+  Input,
+  Checkbox,
+  Tooltip,
+  Progress,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -21,17 +25,46 @@ import {
   ExclamationCircleOutlined,
   PlusOutlined,
   RightOutlined,
+  PushpinOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useThemeStore } from '../../store/useThemeStore';
 import { dashboardApi } from '../../api/dashboard.api';
 import type { DashboardStats, DashboardTaskItem } from '../../api/dashboard.api';
 
+interface StickyNote {
+  id: string;
+  text: string;
+  isDone: boolean;
+  createdAt: number;
+}
+
 const { Title, Text } = Typography;
+
+const loadStickyNotes = (key: string): StickyNote[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      return JSON.parse(raw) as StickyNote[];
+    }
+    const defaultNotes: StickyNote[] = [
+      { id: '1', text: 'Kiểm tra tiến độ sprint tuần này', isDone: false, createdAt: Date.now() },
+      { id: '2', text: 'Review code các pull request đang chờ', isDone: true, createdAt: Date.now() - 3600000 },
+    ];
+    localStorage.setItem(key, JSON.stringify(defaultNotes));
+    return defaultNotes;
+  } catch {
+    return [];
+  }
+};
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { themeMode } = useThemeStore();
+  const isDark = themeMode === 'dark';
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(true);
   const [stats, setStats] = useState<DashboardStats>({
@@ -42,20 +75,74 @@ export const DashboardPage: React.FC = () => {
     myTasks: [],
   });
 
+  const storageKey = `dashboard_sticky_notes_${user?.id || 'guest'}`;
+  const [notes, setNotes] = useState<StickyNote[]>(() => loadStickyNotes(storageKey));
+  const [newNoteText, setNewNoteText] = useState('');
+
   useEffect(() => {
-    fetchStats();
+    let active = true;
+    const loadStats = async () => {
+      try {
+        const data = await dashboardApi.getStats();
+        if (active) {
+          setStats(data);
+        }
+      } catch {
+        if (active) {
+          message.error('Không thể tải dữ liệu thống kê tổng quan');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    void loadStats();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const fetchStats = async () => {
+  const saveNotes = (updated: StickyNote[]) => {
     try {
-      setLoading(true);
-      const data = await dashboardApi.getStats();
-      setStats(data);
+      localStorage.setItem(storageKey, JSON.stringify(updated));
     } catch {
-      message.error('Không thể tải dữ liệu thống kê tổng quan');
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const handleAddNote = () => {
+    const trimmed = newNoteText.trim();
+    if (!trimmed) return;
+    const newNote: StickyNote = {
+      id: Date.now().toString(),
+      text: trimmed,
+      isDone: false,
+      createdAt: Date.now(),
+    };
+    const updated = [newNote, ...notes];
+    setNotes(updated);
+    saveNotes(updated);
+    setNewNoteText('');
+  };
+
+  const handleToggleNote = (id: string) => {
+    const updated = notes.map((n) =>
+      n.id === id ? { ...n, isDone: !n.isDone } : n
+    );
+    setNotes(updated);
+    saveNotes(updated);
+  };
+
+  const handleDeleteNote = (id: string) => {
+    const updated = notes.filter((n) => n.id !== id);
+    setNotes(updated);
+    saveNotes(updated);
+  };
+
+  const handleClearCompleted = () => {
+    const updated = notes.filter((n) => !n.isDone);
+    setNotes(updated);
+    saveNotes(updated);
   };
 
   const getPriorityTag = (priority: string) => {
@@ -73,13 +160,18 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const totalTrackedTasks = stats.completedTasks + stats.inProgressTasks + stats.overdueTasks;
+  const completionPercentage = totalTrackedTasks > 0
+    ? Math.round((stats.completedTasks / totalTrackedTasks) * 100)
+    : 0;
+
   const columns: ColumnsType<DashboardTaskItem> = [
     {
       title: 'Mã',
       key: 'taskKey',
-      width: 120,
+      width: 110,
       render: (_, record) => (
-        <Tag color="geekblue" style={{ fontWeight: 600 }}>
+        <Tag color="geekblue" style={{ fontWeight: 600, margin: 0 }}>
           {record.project.key}-{record.taskNumber}
         </Tag>
       ),
@@ -91,7 +183,7 @@ export const DashboardPage: React.FC = () => {
       render: (title: string, record) => (
         <a
           onClick={() => navigate(`/projects/${record.project.id}`)}
-          style={{ fontWeight: 500, color: '#1e293b' }}
+          style={{ fontWeight: 500, color: isDark ? '#818cf8' : '#1e293b' }}
         >
           {title}
         </a>
@@ -100,32 +192,44 @@ export const DashboardPage: React.FC = () => {
     {
       title: 'Dự án',
       key: 'project',
+      width: 200,
       render: (_, record) => (
-        <span style={{ fontWeight: 500 }}>{record.project.name}</span>
+        <Text
+          strong
+          ellipsis={{ tooltip: record.project.name }}
+          style={{ maxWidth: 190, display: 'inline-block' }}
+        >
+          {record.project.name}
+        </Text>
       ),
     },
     {
       title: 'Trạng thái',
       key: 'column',
+      width: 150,
       render: (_, record) => (
-        <Tag color={record.column.color || 'blue'}>{record.column.title}</Tag>
+        <Tag color={record.column.color || 'blue'} style={{ margin: 0 }}>
+          {record.column.title}
+        </Tag>
       ),
     },
     {
       title: 'Mức ưu tiên',
       dataIndex: 'priority',
       key: 'priority',
+      width: 130,
       render: (priority: string) => getPriorityTag(priority),
     },
     {
       title: 'Hạn chót',
       dataIndex: 'dueDate',
       key: 'dueDate',
+      width: 130,
       render: (dueDate?: string) => {
         if (!dueDate) return <Text type="secondary">Chưa đặt</Text>;
         const isOverdue = dayjs(dueDate).isBefore(dayjs(), 'day');
         return (
-          <Tag color={isOverdue ? 'volcano' : 'default'}>
+          <Tag color={isOverdue ? 'volcano' : 'default'} style={{ margin: 0 }}>
             {dayjs(dueDate).format('DD/MM/YYYY')}
           </Tag>
         );
@@ -135,6 +239,7 @@ export const DashboardPage: React.FC = () => {
       title: 'Hành động',
       key: 'action',
       align: 'right',
+      width: 120,
       render: (_, record) => (
         <Button
           type="link"
@@ -178,9 +283,9 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <Spin spinning={loading}>
-        <Row gutter={[16, 16]} style={{ marginBottom: 28 }}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           <Col xs={24} sm={12} lg={6}>
-            <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 12 }}>
+            <Card bordered={false} style={{ background: isDark ? '#141414' : '#f8fafc', border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9', borderRadius: 12 }}>
               <Statistic
                 title="Tổng số dự án"
                 value={stats.totalProjects}
@@ -191,7 +296,7 @@ export const DashboardPage: React.FC = () => {
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 12 }}>
+            <Card bordered={false} style={{ background: isDark ? '#141414' : '#f8fafc', border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9', borderRadius: 12 }}>
               <Statistic
                 title="Đang thực hiện"
                 value={stats.inProgressTasks}
@@ -202,7 +307,7 @@ export const DashboardPage: React.FC = () => {
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 12 }}>
+            <Card bordered={false} style={{ background: isDark ? '#141414' : '#f8fafc', border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9', borderRadius: 12 }}>
               <Statistic
                 title="Đã hoàn thành"
                 value={stats.completedTasks}
@@ -213,7 +318,7 @@ export const DashboardPage: React.FC = () => {
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 12 }}>
+            <Card bordered={false} style={{ background: isDark ? '#141414' : '#f8fafc', border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9', borderRadius: 12 }}>
               <Statistic
                 title="Công việc quá hạn"
                 value={stats.overdueTasks}
@@ -226,25 +331,203 @@ export const DashboardPage: React.FC = () => {
 
         <Card
           bordered={false}
-          style={{ borderRadius: 12, boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}
+          style={{
+            borderRadius: 12,
+            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+            border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
+            marginBottom: 24,
+          }}
           title={
-            <Space>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>Công việc được giao cho tôi</span>
-              <Tag color="blue">{stats.myTasks.length}</Tag>
-            </Space>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Space>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>Công việc được giao cho tôi</span>
+                <Tag color="blue">{stats.myTasks.length}</Tag>
+              </Space>
+              <Button type="link" size="small" onClick={() => navigate('/my-tasks')} style={{ padding: 0 }}>
+                Xem tất cả
+              </Button>
+            </div>
           }
         >
           <Table
             rowKey="id"
             dataSource={stats.myTasks}
             columns={columns}
-            scroll={{ x: 720 }}
+            scroll={{ x: 820 }}
             pagination={stats.myTasks.length > 5 ? { pageSize: 5 } : false}
             locale={{
               emptyText: <Empty description="Bạn chưa có công việc nào được giao" />,
             }}
           />
         </Card>
+
+        <Row gutter={[20, 20]}>
+          <Col xs={24} lg={12}>
+            <Card
+              bordered={false}
+              style={{
+                borderRadius: 12,
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+                border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
+                height: '100%',
+              }}
+              title={
+                <Space align="center">
+                  <CheckCircleOutlined style={{ color: '#10b981', fontSize: 17 }} />
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>Tiến độ hoàn thành công việc</span>
+                </Space>
+              }
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 28, padding: '16px 4px', flexWrap: 'wrap' }}>
+                <Progress
+                  type="circle"
+                  percent={completionPercentage}
+                  strokeColor={{ '0%': '#10b981', '100%': '#3b82f6' }}
+                  size={120}
+                />
+                <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
+                      <span style={{ color: '#10b981', fontWeight: 600 }}>Đã hoàn thành</span>
+                      <Text strong>{stats.completedTasks} việc</Text>
+                    </div>
+                    <Progress
+                      percent={totalTrackedTasks > 0 ? Math.round((stats.completedTasks / totalTrackedTasks) * 100) : 0}
+                      strokeColor="#10b981"
+                      showInfo={false}
+                      size="small"
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
+                      <span style={{ color: '#f59e0b', fontWeight: 600 }}>Đang thực hiện</span>
+                      <Text strong>{stats.inProgressTasks} việc</Text>
+                    </div>
+                    <Progress
+                      percent={totalTrackedTasks > 0 ? Math.round((stats.inProgressTasks / totalTrackedTasks) * 100) : 0}
+                      strokeColor="#f59e0b"
+                      showInfo={false}
+                      size="small"
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
+                      <span style={{ color: '#ef4444', fontWeight: 600 }}>Quá hạn</span>
+                      <Text strong>{stats.overdueTasks} việc</Text>
+                    </div>
+                    <Progress
+                      percent={totalTrackedTasks > 0 ? Math.round((stats.overdueTasks / totalTrackedTasks) * 100) : 0}
+                      strokeColor="#ef4444"
+                      showInfo={false}
+                      size="small"
+                    />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </Col>
+
+          <Col xs={24} lg={12}>
+            <Card
+              bordered={false}
+              style={{
+                borderRadius: 12,
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+                border: isDark ? '1px solid #27272a' : '1px solid #f1f5f9',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+              styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column' } }}
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Space align="center">
+                    <PushpinOutlined style={{ color: '#f59e0b', fontSize: 17 }} />
+                    <span style={{ fontSize: 16, fontWeight: 600 }}>Ghi chú nhanh</span>
+                    <Tag color="gold" style={{ margin: 0 }}>
+                      {notes.filter((n) => n.isDone).length}/{notes.length}
+                    </Tag>
+                  </Space>
+                  {notes.some((n) => n.isDone) && (
+                    <Button type="link" size="small" onClick={handleClearCompleted} style={{ padding: 0, fontSize: 12 }}>
+                      Dọn việc đã xong
+                    </Button>
+                  )}
+                </div>
+              }
+            >
+              <div style={{ marginBottom: 14 }}>
+                <Input.Search
+                  placeholder="Thêm việc cần nhớ... (Enter)"
+                  enterButton={<PlusOutlined />}
+                  value={newNoteText}
+                  onChange={(e) => setNewNoteText(e.target.value)}
+                  onSearch={handleAddNote}
+                />
+              </div>
+
+              <div style={{ flex: 1, maxHeight: 210, overflowY: 'auto', paddingRight: 2 }}>
+                {notes.length === 0 ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="Chưa có ghi chú nào. Gõ vào ô trên để ghi nhớ nhanh!"
+                    style={{ margin: '20px 0' }}
+                  />
+                ) : (
+                  notes.map((note) => (
+                    <div
+                      key={note.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '9px 12px',
+                        borderRadius: 8,
+                        marginBottom: 8,
+                        background: isDark
+                          ? note.isDone ? '#141414' : '#27272a'
+                          : note.isDone ? '#f8fafc' : '#fefce8',
+                        border: isDark
+                          ? '1px solid #3f3f46'
+                          : note.isDone ? '1px solid #e2e8f0' : '1px solid #fef08a',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <Space align="center" style={{ minWidth: 0, flex: 1, marginRight: 8 }}>
+                        <Checkbox
+                          checked={note.isDone}
+                          onChange={() => handleToggleNote(note.id)}
+                        />
+                        <Text
+                          delete={note.isDone}
+                          type={note.isDone ? 'secondary' : undefined}
+                          style={{
+                            fontSize: 13,
+                            wordBreak: 'break-word',
+                            color: note.isDone ? undefined : isDark ? '#f4f4f5' : '#713f12',
+                          }}
+                        >
+                          {note.text}
+                        </Text>
+                      </Space>
+                      <Tooltip title="Xóa ghi chú">
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleDeleteNote(note.id)}
+                        />
+                      </Tooltip>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </Col>
+        </Row>
       </Spin>
     </div>
   );
