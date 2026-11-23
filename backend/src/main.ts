@@ -44,4 +44,4 @@ async function bootstrap() {
   console.log(`Server đang chạy tại: http://localhost:${port}/api`);
   console.log(`Swagger API Docs:   http://localhost:${port}/api/docs`);
 }
-bootstrap();
+void bootstrap();

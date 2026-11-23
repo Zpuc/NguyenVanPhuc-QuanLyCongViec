@@ -44,6 +44,23 @@ interface StickyNote {
 
 const { Title, Text } = Typography;
 
+const loadStickyNotes = (key: string): StickyNote[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      return JSON.parse(raw) as StickyNote[];
+    }
+    const defaultNotes: StickyNote[] = [
+      { id: '1', text: 'Kiểm tra tiến độ sprint tuần này', isDone: false, createdAt: Date.now() },
+      { id: '2', text: 'Review code các pull request đang chờ', isDone: true, createdAt: Date.now() - 3600000 },
+    ];
+    localStorage.setItem(key, JSON.stringify(defaultNotes));
+    return defaultNotes;
+  } catch {
+    return [];
+  }
+};
+
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const { themeMode } = useThemeStore();
@@ -58,29 +75,33 @@ export const DashboardPage: React.FC = () => {
     myTasks: [],
   });
 
-  const [notes, setNotes] = useState<StickyNote[]>([]);
+  const storageKey = `dashboard_sticky_notes_${user?.id || 'guest'}`;
+  const [notes, setNotes] = useState<StickyNote[]>(() => loadStickyNotes(storageKey));
   const [newNoteText, setNewNoteText] = useState('');
 
-  const storageKey = `dashboard_sticky_notes_${user?.id || 'guest'}`;
-
   useEffect(() => {
-    fetchStats();
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        setNotes(JSON.parse(raw));
-      } else {
-        const defaultNotes: StickyNote[] = [
-          { id: '1', text: 'Kiểm tra tiến độ sprint tuần này', isDone: false, createdAt: Date.now() },
-          { id: '2', text: 'Review code các pull request đang chờ', isDone: true, createdAt: Date.now() - 3600000 },
-        ];
-        setNotes(defaultNotes);
-        localStorage.setItem(storageKey, JSON.stringify(defaultNotes));
+    let active = true;
+    const loadStats = async () => {
+      try {
+        const data = await dashboardApi.getStats();
+        if (active) {
+          setStats(data);
+        }
+      } catch {
+        if (active) {
+          message.error('Không thể tải dữ liệu thống kê tổng quan');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-    } catch {
-      setNotes([]);
-    }
-  }, [user?.id]);
+    };
+    void loadStats();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const saveNotes = (updated: StickyNote[]) => {
     try {
@@ -122,18 +143,6 @@ export const DashboardPage: React.FC = () => {
     const updated = notes.filter((n) => !n.isDone);
     setNotes(updated);
     saveNotes(updated);
-  };
-
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const data = await dashboardApi.getStats();
-      setStats(data);
-    } catch {
-      message.error('Không thể tải dữ liệu thống kê tổng quan');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const getPriorityTag = (priority: string) => {
