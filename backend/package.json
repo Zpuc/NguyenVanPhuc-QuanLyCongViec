@@ -16,6 +16,7 @@
     "start:worker": "nest start --entryFile worker",
     "start:worker:dev": "nest start --entryFile worker --watch",
     "start:worker:prod": "node dist/worker",
+    "vault:init": "node scripts/init-vault.mjs",
     "lint": "oxlint --type-aware src/ test/",
     "seed": "ts-node prisma/seed.ts",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
