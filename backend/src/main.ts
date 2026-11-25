@@ -5,8 +5,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { loadVaultSecrets } from './common/vault/vault.util';
 
 async function bootstrap() {
+  await loadVaultSecrets();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const uploadsDir = join(process.cwd(), 'uploads');

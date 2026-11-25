@@ -10,10 +10,12 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SearchModule } from './modules/search/search.module';
+import { VaultModule } from './common/vault/vault.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    VaultModule,
     PrismaModule,
     AuthModule,
     ProjectsModule,
