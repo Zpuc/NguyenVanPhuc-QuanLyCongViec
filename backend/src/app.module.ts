@@ -11,11 +11,13 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SearchModule } from './modules/search/search.module';
 import { VaultModule } from './common/vault/vault.module';
+import { RedisModule } from './common/redis/redis.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     VaultModule,
+    RedisModule,
     PrismaModule,
     AuthModule,
     ProjectsModule,

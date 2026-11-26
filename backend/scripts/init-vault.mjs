@@ -12,6 +12,7 @@ async function main() {
 
   const secrets = {
     DATABASE_URL: 'postgresql://postgres:vanphuc04@postgres:5432/task_management_db?schema=public',
+    REDIS_URL: 'redis://redis:6379',
     PORT: '3000',
     JWT_SECRET: 'zpuc',
     JWT_EXPIRES_IN: '7d',
