@@ -1,3 +1,4 @@
+import { OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
@@ -6,6 +7,11 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import {
+  REDIS_CHANNELS,
+  RealtimeNotificationEvent,
+} from '../../common/redis/redis.constants';
+import { RedisService } from '../../common/redis/redis.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
 
 @WebSocketGateway({
@@ -15,7 +21,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
   },
 })
 export class NotificationsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
 {
   @WebSocketServer()
   server: Server;
@@ -23,7 +29,27 @@ export class NotificationsGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.redisService.subscribe(
+      REDIS_CHANNELS.NOTIFICATION_REALTIME,
+      (raw: string) => {
+        try {
+          const parsed = JSON.parse(raw) as RealtimeNotificationEvent;
+          if (parsed?.recipientId && parsed?.notification) {
+            this.sendNotificationToUser(
+              parsed.recipientId,
+              parsed.notification,
+            );
+          }
+        } catch {
+          return;
+        }
+      },
+    );
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -74,7 +100,9 @@ export class NotificationsGateway
 
   sendNotificationToUser(userId: string, notification: unknown) {
     if (!this.server) return;
-    this.server.to(this.getUserRoom(userId)).emit('notification:new', notification);
+    this.server
+      .to(this.getUserRoom(userId))
+      .emit('notification:new', notification);
   }
 
   private getUserRoom(userId: string) {

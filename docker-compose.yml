@@ -17,6 +17,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: taskmaster_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   vault:
     image: hashicorp/vault:latest
     container_name: taskmaster_vault
@@ -28,6 +40,27 @@ services:
       - "8200:8200"
     cap_add:
       - IPC_LOCK
+    healthcheck:
+      test: ["CMD-SHELL", "VAULT_ADDR=http://127.0.0.1:8200 vault status"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  vault-init:
+    image: hashicorp/vault:latest
+    container_name: taskmaster_vault_init
+    restart: "no"
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+    depends_on:
+      vault:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        vault kv put secret/taskmaster DATABASE_URL="postgresql://postgres:vanphuc04@postgres:5432/task_management_db?schema=public" REDIS_URL="redis://redis:6379" PORT="3000" JWT_SECRET="zpuc" JWT_EXPIRES_IN="7d"
 
   backend:
     build:
@@ -39,10 +72,6 @@ services:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: root
       VAULT_SECRET_PATH: secret/data/taskmaster
-      DATABASE_URL: postgresql://postgres:vanphuc04@postgres:5432/task_management_db?schema=public
-      PORT: 3000
-      JWT_SECRET: zpuc
-      JWT_EXPIRES_IN: 7d
     ports:
       - "3000:3000"
     volumes:
@@ -50,8 +79,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      vault:
-        condition: service_started
+      redis:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -64,13 +95,13 @@ services:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: root
       VAULT_SECRET_PATH: secret/data/taskmaster
-      DATABASE_URL: postgresql://postgres:vanphuc04@postgres:5432/task_management_db?schema=public
-      JWT_SECRET: zpuc
     depends_on:
       postgres:
         condition: service_healthy
-      vault:
-        condition: service_started
+      redis:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
 
   frontend:
     build:
