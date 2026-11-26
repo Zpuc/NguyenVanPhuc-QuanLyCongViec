@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './database/prisma/prisma.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
+import { NotificationsService } from './modules/notifications/notifications.service';
 import { DeadlineReminderService } from './modules/notifications/deadline-reminder.service';
 import { VaultModule } from './common/vault/vault.module';
 
@@ -12,8 +12,7 @@ import { VaultModule } from './common/vault/vault.module';
     VaultModule,
     ScheduleModule.forRoot(),
     PrismaModule,
-    NotificationsModule,
   ],
-  providers: [DeadlineReminderService],
+  providers: [NotificationsService, DeadlineReminderService],
 })
 export class WorkerModule {}

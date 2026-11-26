@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { NotificationsGateway } from './notifications.gateway';
 
@@ -6,7 +6,7 @@ import { NotificationsGateway } from './notifications.gateway';
 export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationsGateway: NotificationsGateway,
+    @Optional() private readonly notificationsGateway?: NotificationsGateway,
   ) {}
 
   async create(data: {
@@ -26,7 +26,7 @@ export class NotificationsService {
       },
     });
 
-    this.notificationsGateway.sendNotificationToUser(
+    this.notificationsGateway?.sendNotificationToUser(
       data.recipientId,
       notification,
     );
