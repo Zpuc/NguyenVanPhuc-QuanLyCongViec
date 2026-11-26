@@ -1,4 +1,11 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import {
+  CreateNotificationPayload,
+  REDIS_CHANNELS,
+  REDIS_QUEUES,
+} from '../../common/redis/redis.constants';
+import { RedisService } from '../../common/redis/redis.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { NotificationsGateway } from './notifications.gateway';
 
@@ -6,30 +13,50 @@ import { NotificationsGateway } from './notifications.gateway';
 export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     @Optional() private readonly notificationsGateway?: NotificationsGateway,
   ) {}
 
-  async create(data: {
-    recipientId: string;
-    title: string;
-    content: string;
-    type: string;
-    metadata?: any;
-  }) {
+  async create(data: CreateNotificationPayload) {
+    const isApiContext = Boolean(this.notificationsGateway);
+    if (isApiContext && (await this.redisService.hasActiveWorker())) {
+      const queued = await this.redisService.enqueue(
+        REDIS_QUEUES.NOTIFICATIONS,
+        data,
+      );
+      if (queued) {
+        return { queued: true };
+      }
+    }
+
+    return this.persistAndEmit(data);
+  }
+
+  async persistAndEmit(data: CreateNotificationPayload) {
     const notification = await this.prisma.notification.create({
       data: {
         recipientId: data.recipientId,
         title: data.title,
         content: data.content,
         type: data.type,
-        metadata: data.metadata || {},
+        metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
       },
     });
 
-    this.notificationsGateway?.sendNotificationToUser(
-      data.recipientId,
-      notification,
+    const published = await this.redisService.publish(
+      REDIS_CHANNELS.NOTIFICATION_REALTIME,
+      {
+        recipientId: data.recipientId,
+        notification,
+      },
     );
+
+    if (!published) {
+      this.notificationsGateway?.sendNotificationToUser(
+        data.recipientId,
+        notification,
+      );
+    }
 
     return notification;
   }
