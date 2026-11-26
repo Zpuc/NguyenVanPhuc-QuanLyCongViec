@@ -20,7 +20,8 @@ COPY package*.json ./
 COPY prisma ./prisma/
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/scripts ./scripts
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["node", "scripts/start-prod.mjs"]

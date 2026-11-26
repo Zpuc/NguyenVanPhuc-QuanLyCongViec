@@ -5,6 +5,8 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ProjectRole } from '@prisma/client';
@@ -394,9 +396,25 @@ export class ProjectsService {
             throw new ForbiddenException('Chỉ Chủ sở hữu (OWNER) mới có quyền xóa dự án này');
         }
 
+        const attachments = await this.prisma.taskAttachment.findMany({
+            where: { task: { projectId } },
+            select: { fileUrl: true },
+        });
+
         await this.prisma.project.delete({
             where: { id: projectId },
         });
+
+        for (const att of attachments) {
+            const fileName = att.fileUrl.replace(/^\/uploads\//, '');
+            const filePath = join(process.cwd(), 'uploads', fileName);
+            try {
+                if (existsSync(filePath)) {
+                    unlinkSync(filePath);
+                }
+            } catch {
+            }
+        }
 
         return { message: 'Đã xóa dự án thành công' };
     }

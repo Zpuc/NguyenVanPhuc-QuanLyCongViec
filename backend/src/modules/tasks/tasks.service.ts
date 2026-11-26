@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { unlinkSync } from 'fs';
+import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -387,6 +387,11 @@ export class TasksService {
     async remove(taskId: string, userId: string) {
         const task = await this.prisma.task.findUnique({
             where: { id: taskId },
+            include: {
+                attachments: {
+                    select: { fileUrl: true },
+                },
+            },
         });
         if (!task) {
             throw new NotFoundException('Không tìm thấy công việc');
@@ -400,6 +405,17 @@ export class TasksService {
         await this.prisma.task.delete({
             where: { id: taskId },
         });
+
+        for (const att of task.attachments) {
+            const fileName = att.fileUrl.replace(/^\/uploads\//, '');
+            const filePath = join(process.cwd(), 'uploads', fileName);
+            try {
+                if (existsSync(filePath)) {
+                    unlinkSync(filePath);
+                }
+            } catch {
+            }
+        }
 
         return { message: 'Đã xóa công việc thành công' };
     }
