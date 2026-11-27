@@ -10,6 +10,7 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SearchModule } from './modules/search/search.module';
+import { HealthModule } from './modules/health/health.module';
 import { VaultModule } from './common/vault/vault.module';
 import { RedisModule } from './common/redis/redis.module';
 
@@ -19,6 +20,7 @@ import { RedisModule } from './common/redis/redis.module';
     VaultModule,
     RedisModule,
     PrismaModule,
+    HealthModule,
     AuthModule,
     ProjectsModule,
     TasksModule,

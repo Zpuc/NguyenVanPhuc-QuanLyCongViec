@@ -1,4 +1,5 @@
 import axiosClient from './axiosClient';
+import { resolveMediaUrl } from '../config/env';
 
 export interface User {
     id: string;
@@ -34,11 +35,7 @@ export interface AuthResponse {
 }
 
 export const formatAvatarUrl = (url?: string | null): string | undefined => {
-    if (!url) return undefined;
-    if (url.startsWith('/uploads/')) {
-        return `http://localhost:3000${url}`;
-    }
-    return url;
+    return resolveMediaUrl(url);
 };
 
 export const authApi = {

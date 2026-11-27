@@ -46,6 +46,7 @@ import { notificationsApi } from '../api/notifications.api';
 import type { NotificationItem } from '../api/notifications.api';
 import { searchApi } from '../api/search.api';
 import type { SearchResponse } from '../api/search.api';
+import { SOCKET_ORIGIN } from '../config/env';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -157,7 +158,7 @@ export const MainLayout: React.FC = () => {
 
         fetchUnreadCount();
 
-        const socket = io('http://localhost:3000', {
+        const socket = io(SOCKET_ORIGIN, {
             auth: { token },
             transports: ['websocket', 'polling'],
         });

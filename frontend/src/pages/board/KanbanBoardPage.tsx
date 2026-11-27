@@ -63,6 +63,7 @@ import type { ProjectDetail, ColumnItem, TaskItem } from '../../api/projects.api
 import { tasksApi } from '../../api/tasks.api';
 import type { TaskDetail, UpdateTaskDto, ActivityLogItem } from '../../api/tasks.api';
 import { formatAvatarUrl } from '../../api/auth.api';
+import { resolveMediaUrl } from '../../config/env';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useThemeStore } from '../../store/useThemeStore';
 
@@ -1691,7 +1692,7 @@ export const KanbanBoardPage: React.FC = () => {
                   dataSource={taskDetail.attachments}
                   renderItem={(file) => {
                     const isImage = file.mimeType?.startsWith('image/');
-                    const fullUrl = `http://localhost:3000${file.fileUrl}`;
+                    const fullUrl = resolveMediaUrl(file.fileUrl) ?? file.fileUrl;
                     const canDeleteFile = currentUser?.id === file.uploadedBy.id || isOwnerOrAdmin;
 
                     return (

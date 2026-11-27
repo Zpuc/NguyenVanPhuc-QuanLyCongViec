@@ -1,12 +1,12 @@
-import axios from 'axios'
+import axios from 'axios';
+import { API_BASE_URL } from '../config/env';
 
 const axiosClient = axios.create({
-    baseURL: 'http://localhost:3000/api',
+    baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
 });
-
 
 axiosClient.interceptors.request.use(
     (config) => {
@@ -25,7 +25,7 @@ axiosClient.interceptors.response.use(
     },
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('access_token')
+            localStorage.removeItem('access_token');
             localStorage.removeItem('user_info');
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login';
